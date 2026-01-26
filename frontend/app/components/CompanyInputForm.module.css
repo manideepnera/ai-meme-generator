@@ -1,0 +1,217 @@
+.formContainer {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 0 24px;
+    animation: slideUp 0.5s ease-out 0.2s both;
+}
+
+.form {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-normal);
+}
+
+.form:hover {
+    box-shadow: var(--shadow-xl);
+}
+
+.inputWrapper {
+    margin-bottom: 24px;
+}
+
+.label {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+}
+
+.helperText {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    margin-top: -8px;
+    line-height: 1.5;
+}
+
+.textareaContainer {
+    position: relative;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    background: var(--bg-secondary);
+    transition: all var(--transition-normal);
+    overflow: hidden;
+}
+
+.textareaContainer.focused {
+    border-color: var(--primary-500);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.textarea {
+    width: 100%;
+    padding: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    border: none;
+    background: transparent;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+    transition: all var(--transition-normal);
+}
+
+.textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.textarea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.characterCount {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    background: var(--bg-card);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.generateButton {
+    width: 100%;
+    padding: 18px 32px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: white;
+    background: var(--primary-gradient);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.01em;
+}
+
+.generateButton:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.generateButton:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.generateButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.buttonIcon {
+    width: 20px;
+    height: 20px;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.examplesSection {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.examplesLabel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.exampleChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.exampleChip {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--primary-600);
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: 'Inter', sans-serif;
+}
+
+.exampleChip:hover:not(:disabled) {
+    background: rgba(102, 126, 234, 0.15);
+    border-color: var(--primary-500);
+    transform: translateY(-1px);
+}
+
+.exampleChip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 640px) {
+    .form {
+        padding: 24px;
+    }
+
+    .generateButton {
+        padding: 16px 24px;
+        font-size: 1rem;
+    }
+
+    .exampleChip {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+    }
+}

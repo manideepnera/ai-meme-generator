@@ -1,0 +1,262 @@
+.resultContainer {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 24px;
+    animation: slideUp 0.6s ease-out;
+}
+
+.resultCard {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    box-shadow: var(--shadow-xl);
+    border: 1px solid var(--border-color);
+}
+
+.successBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+    border: 1px solid rgba(79, 172, 254, 0.3);
+    border-radius: var(--radius-md);
+    color: #2196f3;
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+}
+
+.successIcon {
+    width: 20px;
+    height: 20px;
+}
+
+.imageWrapper {
+    margin-bottom: 24px;
+}
+
+.imageContainer {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
+}
+
+.imageContainer:hover {
+    box-shadow: var(--shadow-lg);
+    transform: scale(1.02);
+}
+
+.image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-slow);
+}
+
+.imageContainer:hover .image {
+    transform: scale(1.05);
+}
+
+.captionContainer {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border-color);
+}
+
+.captionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.captionLabel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.copyButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary-600);
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.copyButton:hover {
+    background: rgba(102, 126, 234, 0.15);
+    transform: translateY(-1px);
+}
+
+.caption {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.actionButtons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.actionButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    border: none;
+    font-family: 'Outfit', sans-serif;
+}
+
+.downloadButton {
+    background: var(--primary-gradient);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.downloadButton:hover:not(:disabled) {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.downloadButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.regenerateButton {
+    background: var(--bg-secondary);
+    color: var(--primary-600);
+    border: 2px solid var(--border-color);
+}
+
+.regenerateButton:hover {
+    background: rgba(102, 126, 234, 0.08);
+    border-color: var(--primary-500);
+    transform: translateY(-2px);
+}
+
+.icon {
+    width: 20px;
+    height: 20px;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 640px) {
+    .resultCard {
+        padding: 24px;
+    }
+
+    .actionButtons {
+        grid-template-columns: 1fr;
+    }
+
+    .successBadge {
+        font-size: 0.85rem;
+        padding: 10px 16px;
+    }
+
+    .caption {
+        font-size: 1rem;
+    }
+}
+
+.insightContainer {
+    margin-top: 24px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.insightHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    cursor: pointer;
+    background: rgba(102, 126, 234, 0.05);
+    transition: background var(--transition-fast);
+}
+
+.insightHeader:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.insightTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-700);
+}
+
+.insightToggle {
+    color: var(--primary-600);
+    transition: transform var(--transition-normal);
+}
+
+.insightContent {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    background: #fff;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    animation: fadeIn 0.3s ease-out;
+}
