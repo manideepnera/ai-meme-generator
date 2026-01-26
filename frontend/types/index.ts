@@ -2,10 +2,30 @@ export interface MemeGenerationRequest {
     companyDescription: string;
 }
 
+// ============================================
+// BACKEND API RESPONSE TYPES
+// ============================================
+
+/**
+ * Response from FastAPI backend POST /api/v1/generate-meme
+ * Note: Only ONE of meme_url or image_base64 will be present
+ */
+export interface BackendMemeResponse {
+    success: boolean;
+    meme_url?: string;      // URL to the generated meme image (optional)
+    image_base64?: string;  // Base64 encoded image data (optional)
+    caption: string;        // Generated caption for the meme
+    text_position: 'top' | 'bottom';  // Position of caption text
+}
+
+/**
+ * Frontend-normalized response for UI consumption
+ */
 export interface MemeGenerationResponse {
-    imageUrl: string;
+    imageUrl: string;       // Normalized image source (URL or data URI)
     caption: string;
-    memeIdea: string;
+    memeIdea: string;       // Kept for backwards compatibility (may be empty)
+    textPosition: 'top' | 'bottom';
 }
 
 export type GenerationStep =

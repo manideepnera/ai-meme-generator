@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
+// NOTE: Using native <img> instead of Next.js Image to support base64 data URIs
 import styles from './MemeResult.module.css';
 import { MemeGenerationResponse } from '@/types';
 
@@ -31,22 +31,39 @@ export const MemeResult: React.FC<MemeResultProps> = ({
     const handleDownload = async () => {
         setIsDownloading(true);
         try {
-            // Simulate download process
-            // const link = document.createElement('a');
-            // link.href = result.imageUrl;
-            // link.download = 'meme-advertisement.png';
-            // document.body.appendChild(link);
-            // link.click();
-            // document.body.removeChild(link);
+            const imageUrl = result.imageUrl;
+            const fileName = `meme-${Date.now()}.png`;
 
-            // TODO: Implement real download logic here.
-            // Note: For remote images, you often need to fetch it as a Blob first to avoid CORS issues
-            // or proxy it through your backend.
-            alert("Download feature requires a real backend to serve the image file headers.");
+            if (imageUrl.startsWith('data:')) {
+                // Handle base64 image download
+                const link = document.createElement('a');
+                link.href = imageUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                // Handle remote URL image download
+                // Fetch as blob to avoid CORS issues and force download
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Cleanup
+                URL.revokeObjectURL(blobUrl);
+            }
         } catch (error) {
             console.error('Failed to download meme:', error);
+            alert("Failed to download the image. Please try right-clicking the image and selecting 'Save Image As'.");
         } finally {
-            setTimeout(() => setIsDownloading(false), 1000);
+            setIsDownloading(false);
         }
     };
 
@@ -72,16 +89,18 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                     <span>Meme Generated Successfully!</span>
                 </div>
 
-                {/* Meme Image */}
+                {/* ============================================
+                    MEME IMAGE DISPLAY
+                    Supports both URL and base64 data URIs
+                   ============================================ */}
                 <div className={styles.imageWrapper}>
                     <div className={styles.imageContainer}>
-                        <Image
+                        {/* Using native img to support base64 data URIs from backend */}
+                        <img
                             src={result.imageUrl}
                             alt="Generated meme"
-                            width={600}
-                            height={600}
                             className={styles.image}
-                            priority
+                            style={{ width: '100%', height: 'auto', maxWidth: '600px' }}
                         />
                     </div>
                 </div>
@@ -137,34 +156,39 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                     <p className={styles.caption}>{result.caption}</p>
                 </div>
 
-                {/* Meme Insight */}
-                <div className={styles.insightContainer}>
-                    <div
-                        className={styles.insightHeader}
-                        onClick={() => setIsInsightOpen(!isInsightOpen)}
-                    >
-                        <div className={styles.insightTitle}>
-                            <svg className={styles.icon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 18V20M12 4V6M20 12H18M6 12H4M16.95 7.05L15.54 8.46M16.95 16.95L15.54 15.54M7.05 7.05L8.46 8.46M7.05 16.95L8.46 15.54" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                            <span>Behind the Meme (AI Insight)</span>
-                        </div>
+                {/* ============================================
+                    MEME INSIGHT SECTION
+                    Only shown if memeIdea is available from backend
+                   ============================================ */}
+                {result.memeIdea && result.memeIdea.trim() !== '' && (
+                    <div className={styles.insightContainer}>
                         <div
-                            className={styles.insightToggle}
-                            style={{ transform: isInsightOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                            className={styles.insightHeader}
+                            onClick={() => setIsInsightOpen(!isInsightOpen)}
                         >
-                            <svg className={styles.icon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
+                            <div className={styles.insightTitle}>
+                                <svg className={styles.icon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 18V20M12 4V6M20 12H18M6 12H4M16.95 7.05L15.54 8.46M16.95 16.95L15.54 15.54M7.05 7.05L8.46 8.46M7.05 16.95L8.46 15.54" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                <span>Behind the Meme (AI Insight)</span>
+                            </div>
+                            <div
+                                className={styles.insightToggle}
+                                style={{ transform: isInsightOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                            >
+                                <svg className={styles.icon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </div>
                         </div>
-                    </div>
 
-                    {isInsightOpen && (
-                        <div className={styles.insightContent}>
-                            {result.memeIdea}
-                        </div>
-                    )}
-                </div>
+                        {isInsightOpen && (
+                            <div className={styles.insightContent}>
+                                {result.memeIdea}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className={styles.actionButtons}>

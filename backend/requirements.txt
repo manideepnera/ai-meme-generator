@@ -1,0 +1,23 @@
+# AI Meme Generator Backend - Dependencies
+
+# Web Framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# Data Validation
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# HTTP Client (async-safe)
+httpx==0.26.0
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# Logging (optional, for enhanced logging)
+# structlog==24.1.0
+
+# Testing (optional)
+# pytest==8.0.0
+# pytest-asyncio==0.23.4
+# httpx[testing]==0.26.0

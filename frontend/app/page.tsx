@@ -6,11 +6,20 @@ import { Header } from './components/Header';
 import { CompanyInputForm } from './components/CompanyInputForm';
 import { LoadingState } from './components/LoadingState';
 import { MemeResult } from './components/MemeResult';
+import { ErrorState } from './components/ErrorState';  // Added for error handling
 import {
   MemeGenerationResponse,
   GenerationStep,
   LoadingState as LoadingStateType,
 } from '@/types';
+
+// ============================================
+// ERROR STATE TYPE FOR API ERRORS
+// ============================================
+interface ErrorInfo {
+  message: string;
+  details?: string;
+}
 
 export default function Home() {
   const [loadingState, setLoadingState] = useState<LoadingStateType>({
@@ -20,6 +29,10 @@ export default function Home() {
   });
   const [result, setResult] = useState<MemeGenerationResponse | null>(null);
   const [currentDescription, setCurrentDescription] = useState('');
+  // ============================================
+  // ERROR STATE - Tracks API errors
+  // ============================================
+  const [error, setError] = useState<ErrorInfo | null>(null);
 
   const simulateProgress = (
     stepSequence: GenerationStep[],
@@ -51,6 +64,10 @@ export default function Home() {
   const handleGenerate = async (description: string) => {
     setCurrentDescription(description);
     setResult(null);
+    // ============================================
+    // CLEAR PREVIOUS ERROR ON NEW REQUEST
+    // ============================================
+    setError(null);
 
     // Start loading state
     setLoadingState({
@@ -68,7 +85,10 @@ export default function Home() {
 
     simulateProgress(steps, async () => {
       try {
-        // Call the meme generation API
+        // ============================================
+        // BACKEND API CALL
+        // Proxied through Next.js API route which connects to FastAPI
+        // ============================================
         const response = await fetch('/api/generate-meme', {
           method: 'POST',
           headers: {
@@ -77,8 +97,12 @@ export default function Home() {
           body: JSON.stringify({ companyDescription: description }),
         });
 
+        // ============================================
+        // ERROR HANDLING FOR API RESPONSE
+        // ============================================
         if (!response.ok) {
-          throw new Error('Failed to generate meme');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Request failed with status ${response.status}`);
         }
 
         const data: MemeGenerationResponse = await response.json();
@@ -91,8 +115,19 @@ export default function Home() {
         });
 
         setResult(data);
-      } catch (error) {
-        console.error('Error generating meme:', error);
+      } catch (err) {
+        // ============================================
+        // CATCH AND DISPLAY ERRORS TO USER
+        // ============================================
+        console.error('Error generating meme:', err);
+
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+
+        setError({
+          message: 'Failed to generate meme',
+          details: errorMessage,
+        });
+
         setLoadingState({
           isLoading: false,
           currentStep: 'error',
@@ -103,6 +138,15 @@ export default function Home() {
   };
 
   const handleRegenerate = () => {
+    if (currentDescription) {
+      handleGenerate(currentDescription);
+    }
+  };
+
+  // ============================================
+  // RETRY HANDLER FOR ERROR STATE
+  // ============================================
+  const handleRetry = () => {
     if (currentDescription) {
       handleGenerate(currentDescription);
     }
@@ -133,6 +177,18 @@ export default function Home() {
 
         {result && !loadingState.isLoading && (
           <MemeResult result={result} onRegenerate={handleRegenerate} />
+        )}
+
+        {/* ============================================
+            ERROR STATE DISPLAY
+            Shows user-friendly error with retry option
+           ============================================ */}
+        {error && !loadingState.isLoading && (
+          <ErrorState
+            message={error.message}
+            details={error.details}
+            onRetry={handleRetry}
+          />
         )}
 
         {/* Footer */}
