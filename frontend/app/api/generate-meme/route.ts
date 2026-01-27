@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
         // ============================================
         // INPUT VALIDATION
         // ============================================
-        if (!companyDescription || companyDescription.trim().length === 0) {
+        if (!companyDescription || companyDescription.trim().length < 10) {
             return NextResponse.json(
-                { error: 'Company description is required' },
+                { error: 'Company description must be at least 10 characters long' },
                 { status: 400 }
             );
         }
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                prompt: companyDescription,  // Backend expects "prompt" field
+                company_description: companyDescription,
             }),
         });
 
@@ -61,13 +61,19 @@ export async function POST(request: NextRequest) {
         // ============================================
 
         if (!backendResponse.ok) {
-            const errorText = await backendResponse.text();
-            console.error(`[API] Backend error (${backendResponse.status}):`, errorText);
+            let errorDetails: any = {};
+            try {
+                errorDetails = await backendResponse.json();
+            } catch (e) {
+                errorDetails = { raw: await backendResponse.text().catch(() => 'No details available') };
+            }
+
+            console.error(`[API] Backend error (${backendResponse.status}):`, errorDetails);
 
             return NextResponse.json(
                 {
                     error: `Backend error: ${backendResponse.status}`,
-                    details: errorText
+                    details: errorDetails.detail || errorDetails.message || JSON.stringify(errorDetails)
                 },
                 { status: backendResponse.status }
             );
@@ -80,16 +86,8 @@ export async function POST(request: NextRequest) {
         // VALIDATE BACKEND RESPONSE
         // ============================================
 
-        if (!backendData.success) {
-            console.error('[API] Backend returned success: false');
-            return NextResponse.json(
-                { error: 'Meme generation failed on backend' },
-                { status: 500 }
-            );
-        }
-
         // Ensure at least one image source is present
-        if (!backendData.meme_url && !backendData.image_base64) {
+        if (!backendData.image_url && !backendData.image_base64) {
             console.error('[API] Backend response missing image data');
             return NextResponse.json(
                 { error: 'Backend response missing image data' },
@@ -102,11 +100,11 @@ export async function POST(request: NextRequest) {
         // ============================================
 
         // Convert image source to a normalized URL
-        // - If meme_url exists, use it directly
+        // - If image_url exists, use it directly
         // - If image_base64 exists, convert to data URI
         let imageUrl: string;
-        if (backendData.meme_url) {
-            imageUrl = backendData.meme_url;
+        if (backendData.image_url) {
+            imageUrl = backendData.image_url;
         } else {
             // Convert base64 to data URI for img src
             imageUrl = `data:image/png;base64,${backendData.image_base64}`;

@@ -55,8 +55,8 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                             rows={5}
                             disabled={isLoading}
                         />
-                        <div className={styles.characterCount}>
-                            {description.length} characters
+                        <div className={`${styles.characterCount} ${description.trim().length > 0 && description.trim().length < 10 ? styles.countError : ''}`}>
+                            {description.length} characters (min 10)
                         </div>
                     </div>
                 </div>
@@ -64,7 +64,7 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                 <button
                     type="submit"
                     className={styles.generateButton}
-                    disabled={!description.trim() || isLoading}
+                    disabled={description.trim().length < 10 || isLoading}
                 >
                     {isLoading ? (
                         <>

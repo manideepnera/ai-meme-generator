@@ -9,6 +9,7 @@ import { MemeResult } from './components/MemeResult';
 import { ErrorState } from './components/ErrorState';  // Added for error handling
 import {
   MemeGenerationResponse,
+  BackendMemeResponse,
   GenerationStep,
   LoadingState as LoadingStateType,
 } from '@/types';
@@ -86,15 +87,19 @@ export default function Home() {
     simulateProgress(steps, async () => {
       try {
         // ============================================
-        // BACKEND API CALL
-        // Proxied through Next.js API route which connects to FastAPI
+        // DIRECT BACKEND API CALL (Option A)
+        // Bypassing Next.js API routes to call FastAPI directly
         // ============================================
-        const response = await fetch('/api/generate-meme', {
+        const backendEndpoint = 'http://localhost:8000/api/v1/generate-meme';
+
+        const response = await fetch(backendEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ companyDescription: description }),
+          body: JSON.stringify({
+            company_description: description  // Backend expects snake_case
+          }),
         });
 
         // ============================================
@@ -102,10 +107,22 @@ export default function Home() {
         // ============================================
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Request failed with status ${response.status}`);
+          const errorMsg = errorData.detail?.message || errorData.error || `Request failed with status ${response.status}`;
+          throw new Error(errorMsg);
         }
 
-        const data: MemeGenerationResponse = await response.json();
+        const backendData: BackendMemeResponse = await response.json();
+
+        // ============================================
+        // NORMALIZE RESPONSE FOR UI
+        // ============================================
+        // Map backend fields to frontend interface
+        const normalizedData: MemeGenerationResponse = {
+          imageUrl: backendData.image_url || `data:image/png;base64,${backendData.image_base64}`,
+          caption: backendData.caption,
+          memeIdea: '', // Kept for UI compatibility
+          textPosition: backendData.text_position,
+        };
 
         // Set result and complete
         setLoadingState({
@@ -114,7 +131,7 @@ export default function Home() {
           progress: 100,
         });
 
-        setResult(data);
+        setResult(normalizedData);
       } catch (err) {
         // ============================================
         // CATCH AND DISPLAY ERRORS TO USER

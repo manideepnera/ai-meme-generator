@@ -11,8 +11,7 @@ export interface MemeGenerationRequest {
  * Note: Only ONE of meme_url or image_base64 will be present
  */
 export interface BackendMemeResponse {
-    success: boolean;
-    meme_url?: string;      // URL to the generated meme image (optional)
+    image_url?: string;     // URL to the generated meme image (optional)
     image_base64?: string;  // Base64 encoded image data (optional)
     caption: string;        // Generated caption for the meme
     text_position: 'top' | 'bottom';  // Position of caption text

@@ -224,6 +224,14 @@ class ColabService:
                         f"Colab API returned status {response.status_code}: "
                         f"{response.text[:500]}"
                     )
+                    
+                    if response.status_code == 405:
+                        raise ColabResponseError(
+                            f"Colab API returned 405 Method Not Allowed. "
+                            f"This usually means the URL is missing the endpoint path (e.g., /generate). "
+                            f"Current URL: {self.settings.COLAB_API_URL}"
+                        )
+
                     raise ColabResponseError(
                         f"Colab API returned status {response.status_code}: "
                         f"{response.text[:200]}"

@@ -88,6 +88,11 @@
     background: var(--bg-card);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
+    transition: color 0.3s ease;
+}
+
+.countError {
+    color: #ef4444; /* red-500 */
 }
 
 .generateButton {

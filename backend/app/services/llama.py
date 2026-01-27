@@ -57,25 +57,22 @@ class LlamaService:
     # This prompt enforces the STRICT output format
     SYSTEM_PROMPT = """You are an AI meme generator. Your task is to create marketing meme concepts for companies.
 
-IMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no explanations, no extra text.
+IMPORTANT: You MUST respond with ONLY a valid JSON object. 
+Do NOT include markdown code blocks (like ```json).
+Do NOT include any text before or after the JSON.
+Do NOT explain your reasoning.
 
-Your response MUST be a JSON object with EXACTLY these fields:
-{
-  "image_prompt": "detailed description for image generation",
-  "negative_prompt": "things to avoid in the image",
-  "caption": "funny meme caption in English only",
-  "text_position": "top" or "bottom"
-}
+Your response MUST be a single JSON object with EXACTLY these four keys:
+{"image_prompt": "...", "negative_prompt": "...", "caption": "...", "text_position": "top" | "bottom"}
 
-Rules:
-1. image_prompt: Describe a funny, shareable meme image concept. Be specific and detailed.
-2. negative_prompt: List things to avoid (e.g., "text, watermarks, blurry, low quality")
-3. caption: Write a witty, memorable caption in English. Keep it short and punchy.
-4. text_position: Choose "top" or "bottom" based on the meme format.
+Guidelines:
+1. image_prompt: A descriptive scene for an image generator. No text in image.
+2. negative_prompt: "text, watermark, blurry, low quality, distorted"
+3. caption: A short, funny marketing caption.
+4. text_position: Either "top" or "bottom".
 
-DO NOT include any text outside the JSON object.
-DO NOT wrap the JSON in markdown code blocks.
-DO NOT add any explanations before or after the JSON."""
+Example:
+{"image_prompt": "A surprised cat looking at a laptop", "negative_prompt": "text, blurry", "caption": "When the code works on the first try", "text_position": "bottom"}"""
 
     def __init__(self, settings: Optional[Settings] = None):
         """
@@ -161,6 +158,23 @@ Company/Product Description:
 
 Generate a meme concept for this company. Respond with ONLY the JSON object:"""
 
+    def _get_fallback_image_prompt(self, company_description: str, caption: str = "") -> str:
+        """
+        Generate a fallback image prompt based on available info.
+        
+        This is used when the LLM returns an empty or missing image_prompt
+        to ensure the pipeline doesn't break.
+        """
+        # Create a visually descriptive prompt using the caption or description
+        base_topic = caption if caption else company_description
+        
+        # Clean up the base topic (take first 100 chars if too long)
+        if len(base_topic) > 100:
+            base_topic = base_topic[:97] + "..."
+            
+        fallback = f"A funny and relatable meme scene related to: {base_topic}. High quality, vibrant, meme style."
+        return fallback
+
     def _build_request_payload(self, prompt: str) -> dict[str, Any]:
         """
         Build the request payload for the LLaMA API.
@@ -200,8 +214,16 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
         Raises:
             LlamaResponseError: If no valid JSON can be extracted
         """
+        if not response_text:
+            raise LlamaResponseError("Empty response from LLaMA")
+
         # Clean up the response
         text = response_text.strip()
+        
+        # Remove markdown code blocks if present
+        text = re.sub(r'```json\s*(.*?)\s*```', r'\1', text, flags=re.DOTALL)
+        text = re.sub(r'```\s*(.*?)\s*```', r'\1', text, flags=re.DOTALL)
+        text = text.strip()
         
         # Try direct JSON parsing first
         try:
@@ -210,33 +232,30 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
             pass
         
         # Try to find JSON object in the response
-        # LLaMA sometimes adds extra text before/after the JSON
-        json_pattern = r'\{[^{}]*\}'
-        matches = re.findall(json_pattern, text, re.DOTALL)
+        # Using a more robust pattern for JSON finding
+        logger.debug(f"Attempting pattern-based JSON extraction from: {text[:200]}...")
         
-        for match in matches:
+        json_pattern = r'({.*})'
+        match = re.search(json_pattern, text, re.DOTALL)
+        if match:
             try:
-                return json.loads(match)
-            except json.JSONDecodeError:
-                continue
-        
-        # Try to find JSON with nested braces (more complex pattern)
-        nested_pattern = r'\{(?:[^{}]|\{[^{}]*\})*\}'
-        nested_matches = re.findall(nested_pattern, text, re.DOTALL)
-        
-        for match in nested_matches:
-            try:
-                return json.loads(match)
-            except json.JSONDecodeError:
-                continue
-        
-        # If response ends with incomplete JSON (stopped at "}"), try to fix it
-        if not text.endswith("}"):
-            text_with_brace = text + "}"
-            try:
-                return json.loads(text_with_brace)
-            except json.JSONDecodeError:
-                pass
+                content = match.group(1)
+                # Cleanup common truncation issues
+                if content.count('{') > content.count('}'):
+                    content += '}' * (content.count('{') - content.count('}'))
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Regex match found but failed to parse: {e}")
+
+        # If we reach here, let's try a very aggressive cleanup for common truncation
+        # If it looks like it started but didn't finish
+        if text.startswith('{') and not text.endswith('}'):
+            # Try adding closing braces
+            for i in range(1, 5):
+                try:
+                    return json.loads(text + '}' * i)
+                except json.JSONDecodeError:
+                    continue
         
         raise LlamaResponseError(
             f"Could not extract valid JSON from LLaMA response. "
@@ -391,6 +410,29 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
             logger.error(f"Failed to extract JSON from LLaMA response: {e}")
             raise
         
+        # ======================================================================
+        # RESILIENCE: Handle empty or missing image_prompt before validation
+        # ======================================================================
+        image_prompt = json_data.get("image_prompt", "")
+        if not image_prompt or not str(image_prompt).strip():
+            caption = json_data.get("caption", "")
+            fallback_prompt = self._get_fallback_image_prompt(company_description, caption)
+            
+            logger.warning(
+                f"LLaMA returned empty image_prompt. "
+                f"Using fallback: '{fallback_prompt}'"
+            )
+            json_data["image_prompt"] = fallback_prompt
+
+        # Ensure other fields also have safety defaults if missing,
+        # but image_prompt is the critical one for the SD pipeline.
+        if "negative_prompt" not in json_data:
+            json_data["negative_prompt"] = "text, watermark, blurry"
+        if "text_position" not in json_data:
+            json_data["text_position"] = "bottom"
+        if "caption" not in json_data:
+            json_data["caption"] = f"Meme about {company_description[:30]}"
+
         # Validate against our strict schema
         try:
             llama_output = LlamaOutput(**json_data)
