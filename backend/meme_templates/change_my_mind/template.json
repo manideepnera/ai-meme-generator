@@ -1,0 +1,33 @@
+{
+  "id": "change_my_mind",
+  "name": "Change My Mind",
+  "description": "Bold opinion challenging others to disagree",
+  "use_cases": ["opinion", "challenge", "confidence"],
+  "confidence_threshold": 0.65,
+
+  "image": {
+    "file": "template.png",
+    "width": 1000,
+    "height": 650
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 38,
+    "color": "black",
+    "stroke": false,
+    "align": "left"
+  },
+
+  "text_slots": [
+    {
+      "key": "statement",
+      "coordinates": [520, 360],
+      "max_chars": 60
+    }
+  ],
+
+  "example": {
+    "statement": "Coca-Cola tastes best after a long day. Change my mind."
+  }
+}

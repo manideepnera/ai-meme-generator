@@ -1,0 +1,176 @@
+{
+  "distracted_boyfriend": {
+    "strong": [
+      "distracted",
+      "tempted",
+      "can't focus",
+      "sidetracked"
+    ],
+    "context": [
+      "instead of",
+      "choosing",
+      "focus",
+      "studying",
+      "work",
+      "alternative",
+      "new thing",
+      "old thing"
+    ],
+    "negative": [
+      "decision pressure",
+      "confusion"
+    ]
+  },
+
+  "drake_hotline": {
+    "strong": [
+      "no",
+      "not this",
+      "reject",
+      "never"
+    ],
+    "context": [
+      "yes",
+      "this instead",
+      "prefer",
+      "better",
+      "choice",
+      "option"
+    ],
+    "negative": [
+      "confused",
+      "both",
+      "either"
+    ]
+  },
+
+  "two_buttons": {
+    "strong": [
+      "can't decide",
+      "dilemma",
+      "tough choice",
+      "pressure"
+    ],
+    "context": [
+      "choosing",
+      "decision",
+      "stress",
+      "options",
+      "either",
+      "or"
+    ],
+    "negative": [
+      "clear choice",
+      "obvious"
+    ]
+  },
+
+  "expanding_brain": {
+    "strong": [
+      "next level",
+      "evolution",
+      "upgrade",
+      "growth"
+    ],
+    "context": [
+      "learning",
+      "improving",
+      "progress",
+      "better way",
+      "advanced",
+      "level up"
+    ],
+    "negative": [
+      "mistake",
+      "failure",
+      "confusion"
+    ]
+  },
+
+  "change_my_mind": {
+    "strong": [
+      "change my mind",
+      "prove me wrong",
+      "unpopular opinion"
+    ],
+    "context": [
+      "best",
+      "worst",
+      "opinion",
+      "believe",
+      "argument",
+      "fact"
+    ],
+    "negative": [
+      "undecided",
+      "confused"
+    ]
+  },
+
+  "monkey_puppet": {
+    "strong": [
+      "awkward",
+      "regret",
+      "realized",
+      "oops",
+      "uh oh"
+    ],
+    "context": [
+      "said",
+      "did",
+      "moment",
+      "immediately",
+      "after",
+      "now"
+    ],
+    "negative": [
+      "argument",
+      "decision",
+      "choice"
+    ]
+  },
+
+  "hands_up_opinion": {
+    "strong": [
+      "i admit",
+      "honestly",
+      "hands up",
+      "confession"
+    ],
+    "context": [
+      "truth",
+      "fact",
+      "reality",
+      "let's be real",
+      "admit"
+    ],
+    "negative": [
+      "debate",
+      "argument",
+      "fight"
+    ]
+  },
+
+  "woman_yelling_cat": {
+    "strong": [
+      "arguing",
+      "panicking",
+      "blaming",
+      "shouting",
+      "yelling"
+    ],
+    "context": [
+      "team",
+      "boss",
+      "customer",
+      "problem",
+      "issue",
+      "incident"
+    ],
+    "negative": [
+      "choice",
+      "decision",
+      "option"
+    ]
+  }
+}

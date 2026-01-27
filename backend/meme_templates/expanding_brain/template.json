@@ -1,0 +1,37 @@
+{
+  "id": "expanding_brain",
+  "name": "Expanding Brain",
+  "description": "Progression of ideas from basic to superior",
+  "use_cases": ["progression", "levels", "superiority"],
+  "confidence_threshold": 0.78,
+
+  "image": {
+    "file": "template.png",
+    "width": 800,
+    "height": 1200
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 34,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "left"
+  },
+
+  "text_slots": [
+    { "key": "level_1", "coordinates": [120, 140], "max_chars": 22 },
+    { "key": "level_2", "coordinates": [120, 420], "max_chars": 22 },
+    { "key": "level_3", "coordinates": [120, 720], "max_chars": 22 },
+    { "key": "level_4", "coordinates": [120, 1040], "max_chars": 22 }
+  ],
+
+  "example": {
+    "level_1": "Feeling tired",
+    "level_2": "Coffee",
+    "level_3": "Energy drink",
+    "level_4": "Cold Coca-Cola"
+  }
+}

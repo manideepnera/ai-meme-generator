@@ -1,0 +1,41 @@
+{
+  "id": "two_buttons",
+  "name": "Two Buttons",
+  "description": "Stressful decision between two conflicting choices",
+  "use_cases": ["dilemma", "conflict", "pressure"],
+  "confidence_threshold": 0.72,
+
+  "image": {
+    "file": "template.png",
+    "width": 1000,
+    "height": 700
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 36,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+  "text_slots": [
+    {
+      "key": "choice_1",
+      "coordinates": [300, 180],
+      "max_chars": 24
+    },
+    {
+      "key": "choice_2",
+      "coordinates": [700, 180],
+      "max_chars": 24
+    }
+  ],
+
+  "example": {
+    "choice_1": "Sleep early",
+    "choice_2": "Finish work + Coke"
+  }
+}

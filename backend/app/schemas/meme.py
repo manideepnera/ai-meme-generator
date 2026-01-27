@@ -6,7 +6,7 @@ in the meme generation pipeline.
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -143,6 +143,24 @@ class LlamaOutput(BaseModel):
     text_position: TextPosition = Field(
         ...,
         description="Position of text on the meme (top or bottom)"
+    )
+
+    # Optional fields for template matching
+    keywords: Optional[list[str]] = Field(
+        default_factory=list,
+        description="Keywords extracted from the concept"
+    )
+    use_cases: Optional[list[str]] = Field(
+        default_factory=list,
+        description="Relevant meme categories or use cases"
+    )
+    intent: Optional[str] = Field(
+        None,
+        description="The primary intent of the meme (e.g., comparison, irony)"
+    )
+    template_slots: Optional[Dict[str, str]] = Field(
+        default_factory=dict,
+        description="Optional values for template slots if a template is matched"
     )
     
     class Config:

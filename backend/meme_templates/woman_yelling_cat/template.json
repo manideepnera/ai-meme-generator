@@ -1,0 +1,46 @@
+{
+  "id": "woman_yelling_cat",
+  "name": "Woman Yelling at Cat",
+  "description": "One side is emotional or angry while the other is calm or unbothered",
+  "use_cases": [
+    "argument",
+    "contrast",
+    "overreaction",
+    "indifference"
+  ],
+  "confidence_threshold": 0.75,
+
+  "image": {
+    "file": "template.png",
+    "width": 900,
+    "height": 600
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 34,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+  "text_slots": [
+    {
+      "key": "yelling",
+      "coordinates": [225, 80],
+      "max_chars": 30
+    },
+    {
+      "key": "cat",
+      "coordinates": [675, 420],
+      "max_chars": 30
+    }
+  ],
+
+  "example": {
+    "yelling": "WHY IS IT NOT WORKING?",
+    "cat": "Did you check the logs?"
+  }
+}

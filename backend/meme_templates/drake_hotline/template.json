@@ -1,0 +1,42 @@
+{
+  "id": "drake_hotline",
+  "name": "Drake Hotline Bling",
+  "description": "Rejecting one option and approving another",
+  "use_cases": ["preference", "approval", "comparison"],
+  "confidence_threshold": 0.7,
+
+  "image": {
+    "file": "template.png",
+    "width": 1200,
+    "height": 1200
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 44,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+
+  "text_slots": [
+    {
+      "key": "nope",
+      "coordinates": [600, 340],
+      "max_chars": 28
+    },
+    {
+      "key": "yep",
+      "coordinates": [600, 880],
+      "max_chars": 28
+    }
+  ],
+
+  "example": {
+    "nope": "Warm drinks after workout",
+    "yep": "Ice-cold Coca-Cola"
+  }
+}

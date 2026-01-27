@@ -1,0 +1,46 @@
+{
+  "id": "monkey_puppet",
+  "name": "Awkward Look Monkey",
+  "description": "Awkward realization or silent regret after saying or doing something",
+  "use_cases": [
+    "awkward",
+    "realization",
+    "regret",
+    "caught"
+  ],
+  "confidence_threshold": 0.65,
+
+  "image": {
+    "file": "template.png",
+    "width": 900,
+    "height": 450
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 36,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+  "text_slots": [
+    {
+      "key": "before",
+      "coordinates": [225, 420],
+      "max_chars": 30
+    },
+    {
+      "key": "after",
+      "coordinates": [675, 420],
+      "max_chars": 30
+    }
+  ],
+
+  "example": {
+    "before": "When you act confident",
+    "after": "And realize you’re wrong"
+  }
+}

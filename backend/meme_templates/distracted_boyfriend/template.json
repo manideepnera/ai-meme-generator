@@ -1,0 +1,48 @@
+{
+  "id": "distracted_boyfriend",
+  "name": "Distracted Boyfriend",
+  "description": "Choosing a tempting option over the responsible or expected choice",
+  "use_cases": ["temptation", "comparison", "switching_preference"],
+  "confidence_threshold": 0.75,
+
+  "image": {
+    "file": "template.png",
+    "width": 1200,
+    "height": 800
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 42,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+
+  "text_slots": [
+    {
+      "key": "subject",
+      "coordinates": [600, 560],
+      "max_chars": 18
+    },
+    {
+      "key": "old_option",
+      "coordinates": [260, 430],
+      "max_chars": 22
+    },
+    {
+      "key": "new_option",
+      "coordinates": [940, 430],
+      "max_chars": 22
+    }
+  ],
+
+  "example": {
+    "subject": "Me",
+    "old_option": "Studying",
+    "new_option": "Coca-Cola"
+  }
+}

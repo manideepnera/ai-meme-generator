@@ -18,6 +18,7 @@ from app.schemas.meme import (
     MemeGenerateRequest,
     MemeGenerateResponse,
     ErrorResponse,
+    TextPosition,
 )
 from app.services.llama import (
     LlamaService,
@@ -33,6 +34,10 @@ from app.services.colab import (
     ColabConnectionError,
     ColabResponseError,
     get_colab_service,
+)
+from app.services.templates import (
+    TemplateService,
+    get_template_service,
 )
 
 # Configure logging
@@ -85,6 +90,7 @@ async def generate_meme(
     request: MemeGenerateRequest,
     llama_service: Annotated[LlamaService, Depends(get_llama_service)],
     colab_service: Annotated[ColabService, Depends(get_colab_service)],
+    template_service: Annotated[TemplateService, Depends(get_template_service)],
 ) -> MemeGenerateResponse:
     """
     Generate a meme from a company/product description.
@@ -106,7 +112,58 @@ async def generate_meme(
     )
     
     # ==========================================================================
-    # STEP 1: Call LLaMA to generate meme concept
+    # STEP 0: Keyword-First Template Matching (NEW)
+    # ==========================================================================
+    try:
+        logger.info("Step 0: Attempting keyword-first template matching...")
+        keyword_template = template_service.match_templates_by_keywords(request.company_description)
+        
+        if keyword_template:
+            logger.info(f"Keyword-first match found: {keyword_template.id}. Calling LLaMA in light mode...")
+            
+            try:
+                # Get required slot keys from template
+                slot_keys = [slot.key for slot in keyword_template.text_slots]
+                
+                # Call LLaMA to fill slots and generate caption (Light Mode)
+                slot_values, caption = await llama_service.generate_template_slots(
+                    template_id=keyword_template.id,
+                    template_name=keyword_template.name,
+                    slot_keys=slot_keys,
+                    company_description=request.company_description
+                )
+                
+                # Sanitize slot values and caption
+                caption = template_service.sanitize_text(caption, max_chars=150)
+                sanitized_slots = {
+                    key: template_service.sanitize_text(val, next((s.max_chars for s in keyword_template.text_slots if s.key == key), 50))
+                    for key, val in slot_values.items()
+                }
+                
+                logger.info(f"LLaMA filled and sanitized slots for {keyword_template.id}. Rendering...")
+                rendered_image = template_service.render_template(keyword_template, sanitized_slots)
+                image_base64 = template_service.image_to_base64(rendered_image)
+                
+                logger.info("Keyword-first template pipeline successful!")
+                return MemeGenerateResponse(
+                    image_url=None,
+                    image_base64=image_base64,
+                    caption=caption,
+                    text_position=TextPosition.BOTTOM, # Default for templates
+                    image_prompt=f"Template-based: {keyword_template.id}",
+                )
+            except Exception as e:
+                logger.error(f"Keyword-first template path failed: {e}", exc_info=True)
+                logger.info("Falling back to full concept generation.")
+        else:
+            logger.info("No keyword-first template match found.")
+            
+    except Exception as e:
+        logger.error(f"Error in keyword matching Step 0: {e}")
+        # Continue to existing flow
+    
+    # ==========================================================================
+    # STEP 1: Call LLaMA to generate meme concept (Existing Flow)
     # ==========================================================================
     try:
         logger.info("Step 1: Calling LLaMA API for meme concept generation...")
@@ -172,10 +229,40 @@ async def generate_meme(
         )
     
     # ==========================================================================
-    # STEP 2: Forward to Google Colab for image generation
+    # STEP 2: Try template-based generation first
     # ==========================================================================
     try:
-        logger.info("Step 2: Forwarding to Colab for meme image generation...")
+        logger.info("Step 2: Attempting template-based generation...")
+        template = template_service.match_template(llama_output)
+        if template:
+            logger.info(f"Matched template: {template.id}. Filling slots...")
+            slot_values = template_service.fill_template_slots(template, llama_output)
+            
+            logger.info(f"Rendering template {template.id}...")
+            rendered_image = template_service.render_template(template, slot_values)
+            
+            image_base64 = template_service.image_to_base64(rendered_image)
+            
+            logger.info("Template-based generation successful!")
+            return MemeGenerateResponse(
+                image_url=None,
+                image_base64=image_base64,
+                caption=llama_output.caption,
+                text_position=llama_output.text_position,
+                image_prompt=llama_output.image_prompt,
+            )
+        else:
+            logger.info("No suitable template matched. Falling back to AI image generation.")
+            
+    except Exception as e:
+        logger.error(f"Template generation failed: {e}", exc_info=True)
+        logger.info("Falling back to AI image generation due to template error.")
+
+    # ==========================================================================
+    # STEP 3: Forward to Google Colab for image generation (Fallback)
+    # ==========================================================================
+    try:
+        logger.info("Step 3: Forwarding to Colab for meme image generation...")
         colab_response = await colab_service.generate_meme(llama_output)
         logger.info("Colab successfully generated meme image")
         
@@ -219,7 +306,7 @@ async def generate_meme(
         )
     
     # ==========================================================================
-    # STEP 3: Build and return response to frontend
+    # STEP 4: Build and return response to frontend
     # ==========================================================================
     response = MemeGenerateResponse(
         image_url=colab_response.image_url,

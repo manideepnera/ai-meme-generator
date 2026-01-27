@@ -11,7 +11,7 @@ It is responsible for:
 import json
 import logging
 import re
-from typing import Any, Optional
+from typing import Any, Optional, Tuple, Dict, List
 
 import httpx
 
@@ -62,17 +62,53 @@ Do NOT include markdown code blocks (like ```json).
 Do NOT include any text before or after the JSON.
 Do NOT explain your reasoning.
 
-Your response MUST be a single JSON object with EXACTLY these four keys:
-{"image_prompt": "...", "negative_prompt": "...", "caption": "...", "text_position": "top" | "bottom"}
+Your response MUST be a single JSON object with these keys:
+{"image_prompt": "...", "negative_prompt": "...", "caption": "...", "text_position": "top" | "bottom", "keywords": ["..."], "use_cases": ["..."], "intent": "...", "template_slots": {"key": "value"}}
 
 Guidelines:
 1. image_prompt: A descriptive scene for an image generator. No text in image.
 2. negative_prompt: "text, watermark, blurry, low quality, distorted"
 3. caption: A short, funny marketing caption.
 4. text_position: Either "top" or "bottom".
+5. keywords: 3-5 keywords about the meme topic.
+6. use_cases: 1-2 meme use cases (e.g., temptation, comparison, choice).
+7. intent: The primary emotional intent (e.g., irony, satisfaction, frustration).
+8. template_slots: (Optional) If you think a standard meme fits, provide slot values.
+   - distracted_boyfriend: {"subject": "...", "old_option": "...", "new_option": "..."}
+   - drake_hotline: {"nope": "...", "yep": "..."}
+   - two_buttons: {"option_1": "...", "option_2": "..."}
+   - expanding_brain: {"level_1": "...", "level_2": "...", "level_3": "...", "level_4": "..."}
+   - change_my_mind: {"statement": "..."}
+   - monkey_puppet: {"reaction": "..."}
+   - hands_up_opinion: {"opinion": "..."}
+   - woman_yelling_cat: {"yelling_woman": "...", "confused_cat": "..."}
 
 Example:
-{"image_prompt": "A surprised cat looking at a laptop", "negative_prompt": "text, blurry", "caption": "When the code works on the first try", "text_position": "bottom"}"""
+{"image_prompt": "A surprised cat looking at a laptop", "negative_prompt": "text, blurry", "caption": "When the code works on the first try", "text_position": "bottom", "keywords": ["coding", "luck", "surprise"], "use_cases": ["satisfaction"], "intent": "relief", "template_slots": {}}"""
+
+    LIGHT_MODE_SYSTEM_PROMPT = """You are an AI meme assistant. Your task is to fill the text slots for a specific meme template based on a product description.
+
+IMPORTANT: You MUST respond with ONLY a valid JSON object. 
+Do NOT include markdown code blocks.
+Do NOT include any text before or after the JSON.
+
+Your response MUST be a JSON object with these keys:
+{
+  "caption": "A short, catchy meme caption",
+  "template_slots": {
+    "slot_name1": "value1",
+    "slot_name2": "value2"
+  }
+}
+
+Guidelines:
+1. Write like an internet meme: Use natural, human-friendly, and relatable language.
+2. Be concise: Max 4 words per slot.
+3. Be funny: Create a humorous contrast or connection based on the product description.
+4. Clean text: No underscores, no template IDs, no labels, no snake_case, and no technical identifiers.
+5. Originality: Do not simply repeat the user's product description.
+6. Format: Use the provided template slots names exactly.
+7. Return ONLY JSON."""
 
     def __init__(self, settings: Optional[Settings] = None):
         """
@@ -432,6 +468,14 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
             json_data["text_position"] = "bottom"
         if "caption" not in json_data:
             json_data["caption"] = f"Meme about {company_description[:30]}"
+        if "keywords" not in json_data:
+            json_data["keywords"] = []
+        if "use_cases" not in json_data:
+            json_data["use_cases"] = []
+        if "intent" not in json_data:
+            json_data["intent"] = ""
+        if "template_slots" not in json_data:
+            json_data["template_slots"] = {}
 
         # Validate against our strict schema
         try:
@@ -444,11 +488,65 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
             return llama_output
             
         except Exception as e:
-            logger.error(f"LLaMA output validation failed: {e}")
             raise LlamaValidationError(
                 f"LLaMA output does not match expected schema: {str(e)}. "
                 f"Received: {json.dumps(json_data, indent=2)}"
             ) from e
+
+    async def generate_template_slots(
+        self, 
+        template_id: str, 
+        template_name: str, 
+        slot_keys: List[str], 
+        company_description: str
+    ) -> Tuple[Dict[str, str], str]:
+        """
+        Generate slot values and caption for a specific template (Light Mode).
+        
+        This uses a minimal prompt and does NOT request image generation details.
+        
+        Returns:
+            Tuple[Dict[str, str], str]: (slot_values, caption)
+        """
+        prompt = f"""{self.LIGHT_MODE_SYSTEM_PROMPT}
+
+Meme Template: {template_name} ({template_id})
+Required Slots: {", ".join(slot_keys)}
+
+Product/Company Description:
+{company_description}
+
+Generate filling for the slots and a catchy caption. Respond with ONLY JSON:"""
+
+        payload = self._build_request_payload(prompt)
+        headers = self._get_auth_headers()
+
+        try:
+            async with httpx.AsyncClient(timeout=self.settings.LLAMA_TIMEOUT) as client:
+                response = await client.post(
+                    self.settings.LLAMA_API_URL,
+                    headers=headers,
+                    json=payload
+                )
+                
+                if response.status_code != 200:
+                    raise LlamaResponseError(f"LLaMA API returned status {response.status_code}")
+                
+                response_data = response.json()
+                generated_text = self._parse_api_response(response_data)
+                json_data = self._extract_json_from_response(generated_text)
+                
+                slots = json_data.get("template_slots", {})
+                caption = json_data.get("caption", f"Meme for {template_name}")
+                
+                # Ensure all required slots are present (fill with empty if missing)
+                final_slots = {key: slots.get(key, "") for key in slot_keys}
+                
+                return final_slots, caption
+                
+        except Exception as e:
+            logger.error(f"Light-mode LLaMA call failed: {e}")
+            raise LlamaServiceError(f"Failed to fill slots for template {template_id}: {str(e)}")
 
 
 # Convenience function for dependency injection

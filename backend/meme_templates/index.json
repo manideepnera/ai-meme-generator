@@ -1,0 +1,37 @@
+{
+  "version": "1.1",
+  "templates": [
+    {
+      "id": "distracted_boyfriend",
+      "path": "distracted_boyfriend/template.json"
+    },
+    {
+      "id": "drake_hotline",
+      "path": "drake_hotline/template.json"
+    },
+    {
+      "id": "two_buttons",
+      "path": "two_buttons/template.json"
+    },
+    {
+      "id": "expanding_brain",
+      "path": "expanding_brain/template.json"
+    },
+    {
+      "id": "change_my_mind",
+      "path": "change_my_mind/template.json"
+    },
+    {
+      "id": "monkey_puppet",
+      "path": "monkey_puppet/template.json"
+    },
+    {
+      "id": "hands_up_opinion",
+      "path": "hands_up_opinion/template.json"
+    },
+    {
+      "id": "woman_yelling_cat",
+      "path": "woman_yelling_cat/template.json"
+    }
+  ]
+}

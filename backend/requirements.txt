@@ -11,6 +11,9 @@ pydantic-settings==2.1.0
 # HTTP Client (async-safe)
 httpx==0.26.0
 
+# Image Processing
+Pillow==10.2.0
+
 # Environment Variables
 python-dotenv==1.0.1
 

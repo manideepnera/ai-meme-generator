@@ -1,0 +1,40 @@
+{
+  "id": "hands_up_opinion",
+  "name": "Hands Up Opinion",
+  "description": "Standing by a strong opinion or statement without regret",
+  "use_cases": [
+    "opinion",
+    "confidence",
+    "statement",
+    "unapologetic"
+  ],
+  "confidence_threshold": 0.6,
+
+  "image": {
+    "file": "template.png",
+    "width": 1000,
+    "height": 700
+  },
+
+  "text_style": {
+    "font": "Impact",
+    "font_size": 38,
+    "color": "white",
+    "stroke": true,
+    "stroke_width": 3,
+    "stroke_color": "black",
+    "align": "center"
+  },
+
+  "text_slots": [
+    {
+      "key": "statement",
+      "coordinates": [500, 620],
+      "max_chars": 55
+    }
+  ],
+
+  "example": {
+    "statement": "Debugging at 3AM builds character."
+  }
+}
