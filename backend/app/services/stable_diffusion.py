@@ -30,13 +30,14 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# System prompt for brand-aware, marketing-focused image prompt (no text in scene).
+# System prompt for brand-aware, photorealistic image prompt (real humans only, no text in scene).
 ENHANCE_PROMPT_SYSTEM = """You are an expert in brand strategy and viral marketing. Transform the user's input about a company or product into a single, compelling prompt for generating a promotional meme image.
 
-Guidelines:
-- Be brand-aware: Reflect the company's value proposition and target audience.
-- Be marketing-focused: Messaging that works in ads or social campaigns.
-- Meme-suitable: Describe a clear, funny, or relatable visual scene (NO text in the image description).
+CRITICAL STYLE RULES — the image must look like a real photograph of real people:
+- PHOTOREALISTIC only: Describe the scene as it would appear in an actual photograph. Real humans, real settings, real lighting.
+- NO anime, NO illustration, NO artistic style, NO cartoon, NO comic book style, NO exaggerated features. The result must look like a candid or staged photo of real people.
+- Describe real human subjects (e.g. "a man in a suit", "office workers", "people in a meeting") in a relatable, funny situation. No drawn or painted look.
+- NO text in the image description (caption will be added separately).
 - Output ONLY the enhanced image prompt: one or two sentences. No explanations, no quotation marks. English only."""
 
 # Real-world meme templates (for optional template path): id -> slot keys.
@@ -139,15 +140,21 @@ class StableDiffusionService:
         return content
     
     async def _generate_image_dalle(self, prompt: str) -> str:
-        """Generate meme image from prompt using OpenAI DALL-E (Images API)."""
+        """Generate meme image from prompt using OpenAI DALL-E (Images API). Photorealistic, real humans only."""
         client = self._get_client()
+        # Enforce photorealistic: real photograph of real people, no anime/illustration/cartoon
+        photorealistic_suffix = (
+            " Photorealistic style. Real photograph of real people. "
+            "No anime, no illustration, no cartoon, no artistic or comic style. Must look like an actual photo."
+        )
+        full_prompt = (prompt + photorealistic_suffix).strip()
         response = await client.images.generate(
             model=self.settings.STABLE_DIFFUSION_IMAGE_MODEL,
-            prompt=prompt,
+            prompt=full_prompt,
             n=1,
             size="1024x1024",
             response_format="b64_json",
-            style="vivid",
+            style="natural",
         )
         b64 = response.data[0].b64_json if response.data else None
         if not b64:
