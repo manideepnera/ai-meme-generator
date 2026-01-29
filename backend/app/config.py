@@ -81,6 +81,17 @@ class Settings(BaseSettings):
     COLAB_TIMEOUT: int = 120
     
     # ==========================================================================
+    # STABLE DIFFUSION (OpenAI) SETTINGS
+    # ==========================================================================
+    # When set, the pipeline uses OpenAI exclusively for prompt enhancement,
+    # meme image generation (DALL-E), and caption generation. LLaMA and Colab
+    # are not called.
+    STABLE_DIFFUSION_API_KEY: Optional[str] = None
+    STABLE_DIFFUSION_CHAT_MODEL: str = "gpt-4o"
+    STABLE_DIFFUSION_IMAGE_MODEL: str = "dall-e-3"
+    STABLE_DIFFUSION_TIMEOUT: int = 120
+    
+    # ==========================================================================
     # AWS CREDENTIALS (Only needed if using AWS Signature V4 authentication)
     # ==========================================================================
     

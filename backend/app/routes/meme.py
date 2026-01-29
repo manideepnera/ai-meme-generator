@@ -35,6 +35,13 @@ from app.services.colab import (
     ColabResponseError,
     get_colab_service,
 )
+from app.services.stable_diffusion import (
+    StableDiffusionService,
+    StableDiffusionServiceError,
+    StableDiffusionConnectionError,
+    StableDiffusionResponseError,
+    get_stable_diffusion_service,
+)
 from app.services.templates import (
     TemplateService,
     get_template_service,
@@ -64,7 +71,7 @@ router = APIRouter(
             "model": ErrorResponse,
         },
         502: {
-            "description": "External service error (LLaMA or Colab)",
+            "description": "External service error (Stable Diffusion/OpenAI or LLaMA/Colab)",
             "model": ErrorResponse,
         },
         503: {
@@ -76,14 +83,12 @@ router = APIRouter(
     description="""
     Generate a marketing meme for a company or product.
     
-    This endpoint orchestrates the meme generation process:
-    1. Receives company/product description from frontend
-    2. Calls LLaMA API to generate meme concept (image prompt, caption, etc.)
-    3. Forwards the concept to Google Colab for image generation
-    4. Returns the final meme image to the frontend
+    When STABLE_DIFFUSION_API_KEY is set, the pipeline uses OpenAI exclusively:
+    1. Enhances the user prompt (brand-aware, marketing-focused system prompt)
+    2. Generates meme-style image (DALL-E)
+    3. Generates caption (GPT)
     
-    The backend does NOT generate images or overlay text - it only orchestrates
-    the flow between external services.
+    Otherwise, the legacy flow uses LLaMA for concept and Colab for image.
     """,
 )
 async def generate_meme(
@@ -91,14 +96,20 @@ async def generate_meme(
     llama_service: Annotated[LlamaService, Depends(get_llama_service)],
     colab_service: Annotated[ColabService, Depends(get_colab_service)],
     template_service: Annotated[TemplateService, Depends(get_template_service)],
+    stable_diffusion_service: Annotated[StableDiffusionService, Depends(get_stable_diffusion_service)],
 ) -> MemeGenerateResponse:
     """
     Generate a meme from a company/product description.
     
+    When STABLE_DIFFUSION_API_KEY is set, the flow uses OpenAI exclusively
+    (prompt enhancement, image, caption). Otherwise, LLaMA and Colab are used.
+    
     Args:
         request: The meme generation request containing company description
-        llama_service: Injected LLaMA service for concept generation
-        colab_service: Injected Colab service for image generation
+        llama_service: Injected LLaMA service (bypassed when Stable Diffusion is configured)
+        colab_service: Injected Colab service (bypassed when Stable Diffusion is configured)
+        template_service: Injected template service
+        stable_diffusion_service: Injected Stable Diffusion (OpenAI) service
         
     Returns:
         MemeGenerateResponse: The generated meme with image and metadata
@@ -106,13 +117,66 @@ async def generate_meme(
     Raises:
         HTTPException: On validation or service errors
     """
+    from app.config import get_settings
+    settings = get_settings()
+    
     logger.info(
         f"Received meme generation request. "
         f"Description length: {len(request.company_description)} chars"
     )
     
     # ==========================================================================
-    # STEP 0: Keyword-First Template Matching (NEW)
+    # STABLE DIFFUSION (OpenAI) PATH — when configured, use it exclusively
+    # ==========================================================================
+    if settings.STABLE_DIFFUSION_API_KEY:
+        try:
+            logger.info("Using Stable Diffusion (OpenAI) pipeline exclusively.")
+            colab_response, caption, text_position = await stable_diffusion_service.generate_meme(
+                request.company_description
+            )
+            return MemeGenerateResponse(
+                image_url=colab_response.image_url,
+                image_base64=colab_response.image_base64,
+                caption=caption,
+                text_position=text_position,
+                image_prompt="Stable Diffusion (OpenAI) generated",
+            )
+        except StableDiffusionConnectionError as e:
+            logger.error(f"Stable Diffusion connection error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": "stable_diffusion_connection_error",
+                    "message": str(e),
+                    "details": {
+                        "service": "Stable Diffusion (OpenAI)",
+                        "action": "Check STABLE_DIFFUSION_API_KEY and network",
+                    }
+                }
+            )
+        except StableDiffusionResponseError as e:
+            logger.error(f"Stable Diffusion response error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "error": "stable_diffusion_response_error",
+                    "message": str(e),
+                    "details": {"service": "Stable Diffusion (OpenAI)"}
+                }
+            )
+        except StableDiffusionServiceError as e:
+            logger.error(f"Stable Diffusion service error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "error": "stable_diffusion_error",
+                    "message": str(e),
+                    "details": {"service": "Stable Diffusion (OpenAI)"}
+                }
+            )
+    
+    # ==========================================================================
+    # STEP 0: Keyword-First Template Matching (LLaMA/Colab path — bypassed when Stable Diffusion is set)
     # ==========================================================================
     try:
         logger.info("Step 0: Attempting keyword-first template matching...")
@@ -358,8 +422,8 @@ async def readiness_check(
     """
     Readiness check that verifies configuration is loaded.
     
-    Note: This does NOT make actual calls to LLaMA or Colab.
-    It only checks if the required configuration is present.
+    When STABLE_DIFFUSION_API_KEY is set, only that is required (LLaMA/Colab are bypassed).
+    Otherwise, LLaMA and Colab must be configured.
     
     Returns:
         dict: Readiness status with configuration info
@@ -367,20 +431,26 @@ async def readiness_check(
     from app.config import get_settings
     settings = get_settings()
     
+    stable_diffusion_configured = bool(settings.STABLE_DIFFUSION_API_KEY)
     llama_configured = bool(settings.LLAMA_API_URL)
     colab_configured = bool(settings.COLAB_API_URL)
     
+    ready = stable_diffusion_configured or (llama_configured and colab_configured)
+    
     return {
-        "status": "ready" if (llama_configured and colab_configured) else "not_ready",
+        "status": "ready" if ready else "not_ready",
         "configuration": {
+            "stable_diffusion_configured": stable_diffusion_configured,
             "llama_api_configured": llama_configured,
             "colab_api_configured": colab_configured,
             "llama_auth_type": settings.LLAMA_AUTH_TYPE,
         },
         "warnings": [
             msg for msg in [
-                None if llama_configured else "LLAMA_API_URL not configured",
-                None if colab_configured else "COLAB_API_URL not configured",
+                None if ready else (
+                    "Set STABLE_DIFFUSION_API_KEY for OpenAI pipeline, or "
+                    "LLAMA_API_URL and COLAB_API_URL for LLaMA/Colab pipeline"
+                ),
             ] if msg
         ]
     }
