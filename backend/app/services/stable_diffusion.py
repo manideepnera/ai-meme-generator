@@ -5,18 +5,27 @@ This module handles the meme pipeline using OpenAI exclusively:
 1. GPT enhances the user prompt (brand-aware, marketing-focused).
 2. DALL-E generates the meme image (OpenAI Images API).
 3. GPT generates the caption.
+4. Caption is overlaid on the image (meme-style text on the image).
 
 When STABLE_DIFFUSION_API_KEY is set, the meme route diverts here instead of
 LLaMA and Colab. Existing LLaMA/Colab code is not removed, only bypassed.
 """
 
+import base64
 import json
 import logging
+import os
 import re
+from io import BytesIO
 from typing import Any, Dict, Optional, Tuple
 
 from app.config import Settings, get_settings
 from app.schemas.meme import ColabResponse, TextPosition
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = ImageDraw = ImageFont = None  # type: ignore
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -159,16 +168,134 @@ class StableDiffusionService:
         content = (response.choices[0].message.content or "").strip() or "Meme"
         return content[:150]
     
+    def _wrap_text_to_fit(self, text: str, max_width: int, font: Any) -> list[str]:
+        """Wrap caption into lines that fit within max_width. No truncation."""
+        words = text.split()
+        if not words:
+            return []
+        lines: list[str] = []
+        current = ""
+        approx_char = max(8, max_width // 40)
+
+        def measure(s: str) -> int:
+            try:
+                bbox = font.getbbox(s)
+                return bbox[2] - bbox[0]
+            except Exception:
+                return len(s) * approx_char
+
+        for word in words:
+            candidate = f"{current} {word}".strip() if current else word
+            if measure(candidate) <= max_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+                while measure(current) > max_width and len(current) > 1:
+                    lines.append(current[: len(current) // 2])
+                    current = current[len(current) // 2 :]
+        if current:
+            lines.append(current)
+        return lines
+
+    def _overlay_caption(self, image_base64: str, caption: str, position: str = "bottom") -> str:
+        """
+        Overlay caption on the image so it fits perfectly: word-wrap into multiple lines,
+        scale font to fit, meme-style (white + black outline). No truncation.
+        """
+        if not caption or not Image or not ImageDraw or not ImageFont:
+            return image_base64
+        raw = image_base64
+        if raw.startswith("data:"):
+            raw = raw.split(",", 1)[-1]
+        try:
+            data = base64.b64decode(raw)
+        except Exception:
+            return image_base64
+        try:
+            img = Image.open(BytesIO(data)).convert("RGB")
+        except Exception:
+            return image_base64
+        w, h = img.size
+        draw = ImageDraw.Draw(img)
+        padding_x = max(24, w // 15)
+        padding_y = max(16, h // 25)
+        max_line_width = w - 2 * padding_x
+        caption_height_ratio = 0.22
+        max_caption_height = int(h * caption_height_ratio)
+        font_paths = [
+            "C:\\Windows\\Fonts\\impact.ttf" if os.name == "nt" else None,
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ]
+        font_path = None
+        for p in font_paths:
+            if p and os.path.exists(p):
+                font_path = p
+                break
+        font_size = max(28, min(72, w // 10))
+        lines: list[str] = []
+        font: Any = None
+        for _ in range(20):
+            try:
+                font = ImageFont.truetype(font_path, font_size) if font_path else ImageFont.load_default()
+            except Exception:
+                font = ImageFont.load_default()
+            lines = self._wrap_text_to_fit(caption, max_line_width, font)
+            if not font_path:
+                break
+            try:
+                line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
+            except Exception:
+                line_height = font_size
+            total_height = line_height * len(lines) + padding_y * 2
+            if total_height <= max_caption_height and len(lines) <= 4:
+                break
+            font_size = max(18, font_size - 4)
+        if font is None:
+            font = ImageFont.load_default()
+        if not lines:
+            lines = [caption[: max(1, max_line_width // 10)]]
+        try:
+            line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
+        except Exception:
+            line_height = font_size
+        stroke_w = max(2, font_size // 18)
+        y_start = padding_y if position == "top" else h - padding_y - line_height * len(lines)
+        for i, line in enumerate(lines):
+            y = y_start + i * line_height
+            draw.text(
+                (w // 2, y),
+                line,
+                font=font,
+                fill="white",
+                stroke_width=stroke_w,
+                stroke_fill="black",
+                anchor="mm",
+                align="center",
+            )
+        out = BytesIO()
+        img.save(out, format="PNG")
+        b64 = base64.b64encode(out.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+
+    def overlay_caption_on_image(self, image_base64: str, caption: str, position: str = "bottom") -> str:
+        """Public helper: overlay caption on image so it fits (wrap + scale). Used by route for template memes."""
+        return self._overlay_caption(image_base64, caption, position)
+    
     async def generate_meme(self, company_description: str) -> Tuple[ColabResponse, str, TextPosition]:
         """
-        Generate meme using OpenAI: enhance prompt -> DALL-E image -> caption.
-        Image is generated by the Open API (DALL-E).
+        Generate meme using OpenAI: enhance prompt -> DALL-E image -> caption -> overlay caption on image.
+        Image is generated by the Open API (DALL-E); caption is drawn on the image.
         """
         try:
             enhanced = await self._enhance_prompt(company_description)
             logger.info(f"Stable Diffusion enhanced prompt: {enhanced[:80]}...")
             image_base64 = await self._generate_image_dalle(enhanced)
             caption = await self._generate_caption(enhanced)
+            image_base64 = self._overlay_caption(image_base64, caption, "bottom")
         except Exception as e:
             err = str(e).lower()
             if "connect" in err or "auth" in err or "api_key" in err or "rate" in err:
