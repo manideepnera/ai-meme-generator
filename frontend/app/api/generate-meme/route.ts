@@ -101,13 +101,16 @@ export async function POST(request: NextRequest) {
 
         // Convert image source to a normalized URL
         // - If image_url exists, use it directly
-        // - If image_base64 exists, convert to data URI
+        // - If image_base64 exists, use as-is if already a data URI, else add prefix
         let imageUrl: string;
         if (backendData.image_url) {
             imageUrl = backendData.image_url;
+        } else if (backendData.image_base64) {
+            imageUrl = backendData.image_base64.startsWith('data:')
+                ? backendData.image_base64
+                : `data:image/png;base64,${backendData.image_base64}`;
         } else {
-            // Convert base64 to data URI for img src
-            imageUrl = `data:image/png;base64,${backendData.image_base64}`;
+            imageUrl = '';
         }
 
         // Build the normalized response for the frontend

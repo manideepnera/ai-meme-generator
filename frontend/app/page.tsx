@@ -116,9 +116,21 @@ export default function Home() {
         // ============================================
         // NORMALIZE RESPONSE FOR UI
         // ============================================
-        // Map backend fields to frontend interface
+        // Backend may send image_url OR image_base64. image_base64 can be
+        // either raw base64 or already a data URI (e.g. from Stable Diffusion).
+        let imageUrl: string;
+        if (backendData.image_url) {
+          imageUrl = backendData.image_url;
+        } else if (backendData.image_base64) {
+          imageUrl = backendData.image_base64.startsWith('data:')
+            ? backendData.image_base64
+            : `data:image/png;base64,${backendData.image_base64}`;
+        } else {
+          imageUrl = '';
+        }
+
         const normalizedData: MemeGenerationResponse = {
-          imageUrl: backendData.image_url || `data:image/png;base64,${backendData.image_base64}`,
+          imageUrl,
           caption: backendData.caption,
           memeIdea: '', // Kept for UI compatibility
           textPosition: backendData.text_position,
