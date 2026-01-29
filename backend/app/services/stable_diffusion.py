@@ -17,7 +17,7 @@ import logging
 import os
 import re
 from io import BytesIO
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import Settings, get_settings
 from app.schemas.meme import ColabResponse, TextPosition
@@ -30,14 +30,14 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# System prompt for brand-aware, photorealistic image prompt (real humans only, no text in scene).
-ENHANCE_PROMPT_SYSTEM = """You are an expert in brand strategy and viral marketing. Transform the user's input about a company or product into a single, compelling prompt for generating a promotional meme image.
+# System prompt: exactly real humans only — like a film still or news photo. No 3D, no art, no anime.
+ENHANCE_PROMPT_SYSTEM = """You are an expert in brand strategy and viral marketing. Transform the user's input into a single prompt for a PROMOTIONAL MEME IMAGE. The image MUST look EXACTLY like a REAL PHOTOGRAPH of REAL PEOPLE — like a film still or news/magazine photo. Only real humans.
 
-CRITICAL STYLE RULES — the image must look like a real photograph of real people:
-- PHOTOREALISTIC only: Describe the scene as it would appear in an actual photograph. Real humans, real settings, real lighting.
-- NO anime, NO illustration, NO artistic style, NO cartoon, NO comic book style, NO exaggerated features. The result must look like a candid or staged photo of real people.
-- Describe real human subjects (e.g. "a man in a suit", "office workers", "people in a meeting") in a relatable, funny situation. No drawn or painted look.
-- NO text in the image description (caption will be added separately).
+MANDATORY:
+- EXACTLY REAL HUMANS ONLY. Describe the scene as it would appear in a real photograph or film still: real human beings, real skin (pores, natural texture, no smooth or glossy look), real hair, real clothing, natural lighting. Like a still from a movie or a news/magazine photograph of real people.
+- Use phrases: "actual photograph of real people", "film still of", "real photograph of a real person", "real people in", "candid photo of humans". The result must look like a photo of living humans — not 3D, not CGI, not art.
+- FORBIDDEN — never allow: 3D, CGI, digital art, smooth skin, glossy skin, plastic look, anime, cartoon, illustration, drawing, painting, comic, stylized, exaggerated, rendered. Only real humans as in a photograph or film frame.
+- NO text in the image (caption is added separately).
 - Output ONLY the enhanced image prompt: one or two sentences. No explanations, no quotation marks. English only."""
 
 # Real-world meme templates (for optional template path): id -> slot keys.
@@ -91,15 +91,33 @@ class StableDiffusionResponseError(StableDiffusionServiceError):
     pass
 
 
+# Reference template IDs to send to Vision for style guide (real-photo meme style).
+VISION_REFERENCE_TEMPLATES = ["distracted_boyfriend", "drake_hotline", "change_my_mind"]
+
+# Vision: first image = TARGET (real human photo). Others = meme templates. Style guide must match the TARGET.
+VISION_STYLE_PROMPT = """The FIRST image is the TARGET STYLE we want a real person (film still or photo). Real human skin, real hair, real expression — not 3D, not CGI, not art. The other images are meme templates.
+
+Your task: Write a short "style guide" (2–4 sentences) so that generated images look EXACTLY like a real person: actual photograph of real humans only. Say: photo taken with a camera, real human skin with pores and natural texture, real hair, like a film still or news photo. Explicitly say: NOT 3D, NOT CGI, NOT digital art, NOT smooth or glossy skin, NOT anime, NOT cartoon — ONLY real humans as in the first image.
+
+Output ONLY the style guide text, nothing else."""
+
+# Reference image for "real human" style (photorealistic meme like user's 2nd image). Loaded first for Vision.
+REFERENCE_REAL_HUMAN_PATHS = [
+    "reference_real_human.png",  # in meme_templates (user can add)
+    "image-fe68bbc3-dbbe-4c49-833d-2acb207c86ad.png",  # in assets (real-human reference)
+]
+
+
 class StableDiffusionService:
     """
     Service for meme pipeline using OpenAI: prompt enhancement (GPT), image (DALL-E), caption (GPT).
-    Uses "Stable Diffusion" name in code.
+    Uses meme templates as reference via Vision to enforce real-world photorealistic style.
     """
     
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or get_settings()
         self._client = None
+        self._style_guide_cache: Optional[str] = None
         if not self.settings.STABLE_DIFFUSION_API_KEY:
             logger.warning(
                 "STABLE_DIFFUSION_API_KEY is not configured. "
@@ -123,6 +141,90 @@ class StableDiffusionService:
         self._client = AsyncOpenAI(api_key=self.settings.STABLE_DIFFUSION_API_KEY)
         return self._client
     
+    def _get_templates_dir(self) -> str:
+        """Return absolute path to meme_templates directory."""
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "meme_templates"))
+    
+    def _get_project_root(self) -> str:
+        """Return project root (parent of backend)."""
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    
+    def _load_template_images_for_vision(self) -> List[Dict[str, Any]]:
+        """Load reference real-human image FIRST (target style), then 2 meme template PNGs. For OpenAI Vision."""
+        parts: List[Dict[str, Any]] = []
+        templates_dir = self._get_templates_dir()
+        project_root = self._get_project_root()
+        # 1) Load reference "real human" image first so Vision uses it as TARGET STYLE
+        for name in REFERENCE_REAL_HUMAN_PATHS:
+            for base in (templates_dir, os.path.join(project_root, "assets")):
+                path = os.path.join(base, name)
+                if os.path.exists(path):
+                    try:
+                        with open(path, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode("utf-8")
+                        parts.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
+                        logger.info(f"Loaded real-human reference for Vision: {path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Could not load reference image {path}: {e}")
+            if parts:
+                break
+        # 2) Load 2 meme template PNGs
+        for template_id in VISION_REFERENCE_TEMPLATES:
+            if len(parts) >= 3:
+                break
+            png_path = os.path.join(templates_dir, template_id, "template.png")
+            if not os.path.exists(png_path):
+                continue
+            try:
+                with open(png_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                parts.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
+            except Exception as e:
+                logger.warning(f"Could not load template image {template_id}: {e}")
+        return parts
+    
+    async def _get_style_guide_from_templates(self) -> str:
+        """Use OpenAI Vision with meme template images as reference; return style guide for DALL-E (cached)."""
+        if self._style_guide_cache is not None:
+            return self._style_guide_cache
+        client = self._get_client()
+        image_parts = self._load_template_images_for_vision()
+        if not image_parts:
+            fallback = (
+                "Actual photograph taken with a camera of real people. Real human skin with pores and natural texture, real hair. "
+                "Not CGI, not 3D render, not digital art, not smooth or glossy. Like a magazine ad or documentary photo."
+            )
+            self._style_guide_cache = fallback
+            return fallback
+        content: List[Dict[str, Any]] = [
+            {"type": "text", "text": VISION_STYLE_PROMPT},
+            *image_parts,
+        ]
+        try:
+            response = await client.chat.completions.create(
+                model=self.settings.STABLE_DIFFUSION_CHAT_MODEL,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=300,
+            )
+            guide = (response.choices[0].message.content or "").strip()
+            if not guide:
+                guide = (
+                    "Actual photograph of real people. Real skin texture, real hair. "
+                    "Not CGI, not 3D render, not smooth or glossy."
+                )
+            self._style_guide_cache = guide
+            logger.info(f"Style guide from meme templates (Vision): {guide[:80]}...")
+            return guide
+        except Exception as e:
+            logger.warning(f"Vision style guide failed, using fallback: {e}")
+            fallback = (
+                "Actual photograph taken with a camera of real people. Real skin with pores, real hair. "
+                "Not CGI, not 3D render, not smooth or glossy. Like a magazine ad or documentary photo."
+            )
+            self._style_guide_cache = fallback
+            return fallback
+    
     async def _enhance_prompt(self, company_description: str) -> str:
         """Enhance user input into a brand-aware image prompt (GPT)."""
         client = self._get_client()
@@ -139,15 +241,16 @@ class StableDiffusionService:
             raise StableDiffusionResponseError("Empty enhanced prompt from API")
         return content
     
-    async def _generate_image_dalle(self, prompt: str) -> str:
-        """Generate meme image from prompt using OpenAI DALL-E (Images API). Photorealistic, real humans only."""
+    async def _generate_image_dalle(self, prompt: str, style_guide: str = "") -> str:
+        """Generate meme image from prompt using OpenAI DALL-E. Uses style guide from meme templates (Vision) + strict photorealistic suffix."""
         client = self._get_client()
-        # Enforce photorealistic: real photograph of real people, no anime/illustration/cartoon
+        # Exactly real humans only: like a film still or news photo. No 3D, no art, no anime.
         photorealistic_suffix = (
-            " Photorealistic style. Real photograph of real people. "
-            "No anime, no illustration, no cartoon, no artistic or comic style. Must look like an actual photo."
+            " Exactly real humans only. This must look like a real photograph or film still of real people. "
+            "Real human skin with pores and natural texture, real hair. Not 3D. Not CGI. Not digital art. "
+            "Not smooth skin. Not glossy. Not anime. Not cartoon. Not illustration. Only real humans as in a photo or movie still."
         )
-        full_prompt = (prompt + photorealistic_suffix).strip()
+        full_prompt = " ".join(filter(None, [prompt.strip(), style_guide.strip(), photorealistic_suffix])).strip()
         response = await client.images.generate(
             model=self.settings.STABLE_DIFFUSION_IMAGE_MODEL,
             prompt=full_prompt,
@@ -294,13 +397,14 @@ class StableDiffusionService:
     
     async def generate_meme(self, company_description: str) -> Tuple[ColabResponse, str, TextPosition]:
         """
-        Generate meme using OpenAI: enhance prompt -> DALL-E image -> caption -> overlay caption on image.
-        Image is generated by the Open API (DALL-E); caption is drawn on the image.
+        Generate meme using OpenAI: style guide from meme templates (Vision) -> enhance prompt -> DALL-E image -> caption -> overlay.
+        Image is generated by the Open API (DALL-E) with reference to real-photo meme template style.
         """
         try:
+            style_guide = await self._get_style_guide_from_templates()
             enhanced = await self._enhance_prompt(company_description)
             logger.info(f"Stable Diffusion enhanced prompt: {enhanced[:80]}...")
-            image_base64 = await self._generate_image_dalle(enhanced)
+            image_base64 = await self._generate_image_dalle(enhanced, style_guide)
             caption = await self._generate_caption(enhanced)
             image_base64 = self._overlay_caption(image_base64, caption, "bottom")
         except Exception as e:
