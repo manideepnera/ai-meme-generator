@@ -145,6 +145,10 @@ class TemplateService:
 
         return best_match
 
+    def get_template_by_id(self, template_id: str) -> Optional[MemeTemplate]:
+        """Return a loaded meme template by id, or None if not found."""
+        return self.templates.get(template_id)
+
     def match_templates_by_keywords(self, description: str, threshold: int = 3) -> Optional[MemeTemplate]:
         """
         Match a meme template using deterministic keyword scoring.
