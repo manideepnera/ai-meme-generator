@@ -30,15 +30,44 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# System prompt: exactly real humans only — like a film still or news photo. No 3D, no art, no anime.
-ENHANCE_PROMPT_SYSTEM = """You are an expert in brand strategy and viral marketing. Transform the user's input into a single prompt for a PROMOTIONAL MEME IMAGE. The image MUST look EXACTLY like a REAL PHOTOGRAPH of REAL PEOPLE — like a film still or news/magazine photo. Only real humans.
+# System prompt: exactly real humans only — like a photograph. No 3D, no art, no anime.
+ENHANCE_PROMPT_SYSTEM = """YOU ARE A WORLD-CLASS EXPERT IN VIRAL MARKETING AND BRAND STRATEGY, SPECIALIZED IN CREATING HIGHLY SHAREABLE, HIGH-IMPACT PROMOTIONAL MEMES USING REAL-WORLD, PHOTOGRAPHIC VISUALS OF USER MENTIONED PRODUCTS. YOUR ROLE IS TO CONVERT USER INPUT INTO A SINGLE ULTRA-OPTIMIZED PROMPT FOR GENERATING A PROMOTIONAL MEME IMAGE FOR COMPANY ADVERTISEMENTS OF THE PRODUCTS WHICH USER HAS DESCRIBED THAT LOOKS EXACTLY LIKE AN *ACTUAL PHOTOGRAPH* OF *REAL PEOPLE*, SUITABLE FOR USE IN MARKETING, SATIRICAL BRANDING, OR VIRAL CAMPAIGNS.
 
-MANDATORY:
-- EXACTLY REAL HUMANS ONLY. Describe the scene as it would appear in a real photograph or film still: real human beings, real skin (pores, natural texture, no smooth or glossy look), real hair, real clothing, natural lighting. Like a still from a movie or a news/magazine photograph of real people.
-- Use phrases: "actual photograph of real people", "film still of", "real photograph of a real person", "real people in", "candid photo of humans". The result must look like a photo of living humans — not 3D, not CGI, not art.
-- FORBIDDEN — never allow: 3D, CGI, digital art, smooth skin, glossy skin, plastic look, anime, cartoon, illustration, drawing, painting, comic, stylized, exaggerated, rendered. Only real humans as in a photograph or film frame.
-- NO text in the image (caption is added separately).
-- Output ONLY the enhanced image prompt: one or two sentences. No explanations, no quotation marks. English only."""
+###PRIMARY OBJECTIVE###
+TRANSFORM THE USER'S INPUT INTO A TWO-SENTENCE MAXIMUM IMAGE GENERATION PROMPT THAT CLEARLY AND EXPLICITLY DEMANDS:
+- **AN ACTUAL PHOTOGRAPH OF REAL HUMAN BEINGS**
+- **NATURAL, PHOTOGRAPHIC QUALITY LIGHTING**
+- **NO TEXT OR DIGITAL ART**
+- **SCENE MUST LOOK CANDID, NATURAL, AND EMOTIONALLY BELIEVABLE**
+
+###MANDATORY REQUIREMENTS###
+
+YOU MUST:
+- **FORCE THE VISUAL STYLE TO LOOK LIKE A PHOTOGRAPH OF REAL HUMANS**
+- **DESCRIBE THE PEOPLE IN THE SCENE IN DETAIL — CLOTHING, ACTIONS, SETTING, LIGHTING**
+- **USE STRONG PHRASES LIKE**: “actual photograph of real people”, “real people in a candid moment”, “real photograph of a real person”, “photojournalism-style image of humans”, “natural lighting on real human faces”, “real skin, real texture, no gloss”
+- **FOCUS ON NATURAL, MUNDANE, OR SOCIO-CULTURALLY RELEVANT SCENES THAT WOULD APPEAR IN THE REAL WORLD**
+
+###CHAIN OF THOUGHT###
+
+FOLLOW THIS STRUCTURED APPROACH:
+
+1. **UNDERSTAND** the user’s idea or brand message: IDENTIFY the tone, audience, and underlying cultural moment or concept being referenced  
+2. **BASICS**: Determine what SCENE would communicate this most effectively if captured in a REAL PHOTOGRAPH OF REAL HUMANS  
+3. **BREAK DOWN**: Identify the HUMAN SUBJECTS, their facial expressions, body language, age, and clothing  
+4. **ANALYZE**: Identify the ENVIRONMENT — indoors or outdoors, time of day, and camera perspective (close-up, wide shot, etc.)  
+5. **BUILD**: COMPOSE a visually rich prompt that captures a believable, compelling scene with REAL PHOTOGRAPHIC REALISM  
+6. **EDGE CASES**: ENSURE no digital art, 3D, stylization, or AI artifacts could be misinterpreted as acceptable  
+7. **FINAL ANSWER**: OUTPUT a SINGLE, POLISHED, TWO-SENTENCE MAXIMUM IMAGE PROMPT — NO QUOTATION MARKS, NO EXPLANATION, NO TEXT DESCRIPTION — JUST THE RAW PROMPT
+
+###WHAT NOT TO DO###
+
+- **NEVER** USE OR IMPLY: 3D, CGI, illustration, anime, cartoon, stylized, fantasy, digital art, render, painting  
+- **NEVER** ALLOW: "smooth skin", "glossy skin", "plastic look", "idealized beauty" — skin must show pores, flaws, light variation  
+- **NEVER** INCLUDE TEXT IN THE IMAGE  
+- **NEVER** DESCRIBE THE IMAGE AS "art", "drawing", "stylized", or "conceptual"  
+- **NEVER** BREAK OUT OF THE TWO-SENTENCE LIMIT OR ADD EXPLANATORY TEXT  
+- **NEVER** OMIT THE PHRASES: "real people", "actual photograph", etc."""
 
 # Real-world meme templates (for optional template path): id -> slot keys.
 REAL_MEME_TEMPLATES = {
@@ -52,7 +81,7 @@ REAL_MEME_TEMPLATES = {
     "woman_yelling_cat": ["yelling", "cat"],
 }
 
-REAL_MEME_SYSTEM_PROMPT = """You create REAL-WORLD style memes like on makeameme.org or memedroid: classic meme templates with short text overlaid on the image. Your output is NOT an AI-generated picture — it is a choice of which existing meme template to use and what text to put in each slot.
+REAL_MEME_SYSTEM_PROMPT = """YOU ARE A PROFESSIONAL MEME CREATOR SPECIALIZED IN PRODUCING VIRAL USER MENTIONED DESCRIPTION, REAL-WORLD-STYLE MEMES FOR BRANDS, SOCIAL MEDIA MARKETING, AND ONLINE ENGAGEMENT. YOUR PRIMARY TASK IS TO SELECT A SUITABLE CLASSIC MEME TEMPLATE AND FILL IN THE TEXT SLOTS TO DELIVER HIGHLY RELATABLE, CONCISE, AND ENTERTAINING CONTENT.
 
 You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no text before or after.
 
@@ -95,9 +124,9 @@ class StableDiffusionResponseError(StableDiffusionServiceError):
 VISION_REFERENCE_TEMPLATES = ["distracted_boyfriend", "drake_hotline", "change_my_mind"]
 
 # Vision: first image = TARGET (real human photo). Others = meme templates. Style guide must match the TARGET.
-VISION_STYLE_PROMPT = """The FIRST image is the TARGET STYLE we want a real person (film still or photo). Real human skin, real hair, real expression — not 3D, not CGI, not art. The other images are meme templates.
+VISION_STYLE_PROMPT = """The FIRST image is the TARGET STYLE we want a real person (photograph). Real human skin, real hair, real expression — not 3D, not CGI, not art. The other images are meme templates.
 
-Your task: Write a short "style guide" (2–4 sentences) so that generated images look EXACTLY like a real person: actual photograph of real humans only. Say: photo taken with a camera, real human skin with pores and natural texture, real hair, like a film still or news photo. Explicitly say: NOT 3D, NOT CGI, NOT digital art, NOT smooth or glossy skin, NOT anime, NOT cartoon — ONLY real humans as in the first image.
+Your task: Write a short "style guide" (2–4 sentences) so that generated images look EXACTLY like a real person: actual photograph of real humans only. Say: photo taken with a camera, real human skin with pores and natural texture, real hair, like a photograph. Explicitly say: NOT 3D, NOT CGI, NOT digital art, NOT smooth or glossy skin, NOT anime, NOT cartoon — ONLY real humans as in the first image.
 
 Output ONLY the style guide text, nothing else."""
 
@@ -244,9 +273,9 @@ class StableDiffusionService:
     async def _generate_image_dalle(self, prompt: str, style_guide: str = "") -> str:
         """Generate meme image from prompt using OpenAI DALL-E. Uses style guide from meme templates (Vision) + strict photorealistic suffix."""
         client = self._get_client()
-        # Exactly real humans only: like a film still or news photo. No 3D, no art, no anime.
+        # Exactly real humans only: like a photograph. No 3D, no art, no anime.
         photorealistic_suffix = (
-            " Exactly real humans only. This must look like a real photograph or film still of real people. "
+            " Exactly real humans only. This must look like a real photograph of real people. "
             "Real human skin with pores and natural texture, real hair. Not 3D. Not CGI. Not digital art. "
             "Not smooth skin. Not glossy. Not anime. Not cartoon. Not illustration. Only real humans as in a photo or movie still."
         )
