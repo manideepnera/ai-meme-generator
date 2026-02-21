@@ -130,7 +130,7 @@ async def generate_meme(
     # ==========================================================================
     if settings.STABLE_DIFFUSION_API_KEY:
         try:
-            logger.info("Using Stable Diffusion (OpenAI) pipeline — image from Open API (DALL-E) only.")
+            logger.info("Using Stable Diffusion")
             colab_response, caption, text_position = await stable_diffusion_service.generate_meme(
                 request.company_description
             )

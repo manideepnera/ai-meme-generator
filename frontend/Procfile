@@ -1,0 +1,1 @@
+web: sh -c 'exec npx next start -H "::" -p ${PORT:-3000}'

@@ -87,18 +87,15 @@ export default function Home() {
     simulateProgress(steps, async () => {
       try {
         // ============================================
-        // DIRECT BACKEND API CALL (Option A)
-        // Bypassing Next.js API routes to call FastAPI directly
+        // Call Next.js API route (uses NEXT_PUBLIC_BACKEND_URL in production)
         // ============================================
-        const backendEndpoint = 'http://localhost:8000/api/v1/generate-meme';
-
-        const response = await fetch(backendEndpoint, {
+        const response = await fetch('/api/generate-meme', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            company_description: description  // Backend expects snake_case
+            companyDescription: description,
           }),
         });
 
