@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     LLAMA_TIMEOUT: int = 60
     
     # ==========================================================================
+    # GEMINI API SETTINGS (for meme concept + caption; used instead of LLaMA)
+    # ==========================================================================
+    # Get your API key at https://aistudio.google.com/app/apikey
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TIMEOUT: int = 60
+    
+    # ==========================================================================
     # GOOGLE COLAB SETTINGS
     # ==========================================================================
     

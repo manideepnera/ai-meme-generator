@@ -259,3 +259,43 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error type/code")
     message: str = Field(..., description="Human-readable error message")
     details: Optional[dict] = Field(None, description="Additional error details")
+
+
+# =============================================================================
+# OVERLAY CAPTION (for Puter.js frontend flow – no API key required)
+# =============================================================================
+
+class OverlayCaptionRequest(BaseModel):
+    """Request to overlay caption on an image (used after Puter.js generates image)."""
+    image_base64: str = Field(..., description="Base64 image data (with or without data:image/... prefix)")
+    caption: str = Field(..., min_length=1, max_length=500, description="Caption text to overlay")
+
+
+class OverlayCaptionResponse(BaseModel):
+    """Response with image base64 after caption overlay."""
+    image_base64: str = Field(..., description="Base64 data URI of image with caption overlaid")
+
+
+# =============================================================================
+# GENERATE CAPTION (LLaMA-only, for Puter image flow)
+# =============================================================================
+
+class GenerateCaptionRequest(BaseModel):
+    """Request to generate a meme caption from company description (via LLaMA)."""
+    company_description: str = Field(..., min_length=1, max_length=2000)
+
+
+class GenerateCaptionResponse(BaseModel):
+    """Response with LLaMA-generated caption."""
+    caption: str = Field(..., description="Generated meme caption")
+
+
+class GenerateMemeConceptRequest(BaseModel):
+    """Request for a funny meme concept (caption + image prompt) for Puter image flow."""
+    company_description: str = Field(..., min_length=1, max_length=2000)
+
+
+class GenerateMemeConceptResponse(BaseModel):
+    """Response with caption and image_prompt so the image illustrates the joke."""
+    caption: str = Field(..., description="Funny meme caption (makes people laugh)")
+    image_prompt: str = Field(..., description="Scene for image generator that illustrates the joke")

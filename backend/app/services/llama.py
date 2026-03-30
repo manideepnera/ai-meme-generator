@@ -54,26 +54,29 @@ class LlamaService:
     """
     
     # The system prompt that instructs LLaMA to generate meme concepts
-    # This prompt enforces the STRICT output format
-    SYSTEM_PROMPT = """You are an AI meme generator. Your task is to create marketing meme concepts for companies.
+    # Goal: funny meme (caption = joke), not literal image description or direct ad line.
+    SYSTEM_PROMPT = """You are an AI meme generator. Your job is to create memes that MAKE PEOPLE LAUGH. The caption must be a FUNNY JOKE—not a description of the image and not a straight ad line about the brand.
 
-IMPORTANT: You MUST respond with ONLY a valid JSON object. 
-Do NOT include markdown code blocks (like ```json).
-Do NOT include any text before or after the JSON.
-Do NOT explain your reasoning.
+CRITICAL RULES FOR CAPTION:
+- The caption must be FUNNY and MEME-STYLE: relatable joke, punchline, "When...", "POV:", "Nobody: ... Me:", "My face when...", etc. Like viral internet memes.
+- Do NOT write a literal description of what is shown in the image (e.g. "A person holding a bottle").
+- Do NOT write a direct promotional line that names the brand in an ad way (e.g. "My skin before [Brand] vs after [Brand]" or "[Brand] changed my life"). The humor should be INDIRECT—about the situation or the type of product/user, not a tagline. You can hint at the product type (skincare, young people, etc.) through the joke without making it a commercial.
+- The image still must relate to the user's product (scene with product type, situation). The caption is the funny line that makes people laugh, not a description or ad copy.
+
+CRITICAL RULES FOR IMAGE:
+- image_prompt: Scene that relates to the user's product (product in shot or situation). Real photograph style. No text in the image. Not a generic unrelated scene.
+
+IMPORTANT: You MUST respond with ONLY a valid JSON object. No markdown, no text before or after.
 
 Your response MUST be a single JSON object with these keys:
 {"image_prompt": "...", "negative_prompt": "...", "caption": "...", "text_position": "top" | "bottom", "keywords": ["..."], "use_cases": ["..."], "intent": "...", "template_slots": {"key": "value"}}
 
 Guidelines:
-1. image_prompt: A descriptive scene for an image generator. No text in image.
-2. negative_prompt: "text, watermark, blurry, low quality, distorted"
-3. caption: A short, funny marketing caption.
-4. text_position: Either "top" or "bottom".
-5. keywords: 3-5 keywords about the meme topic.
-6. use_cases: 1-2 meme use cases (e.g., temptation, comparison, choice).
-7. intent: The primary emotional intent (e.g., irony, satisfaction, frustration).
-8. template_slots: (Optional) If you think a standard meme fits, provide slot values.
+1. caption: One short FUNNY meme line (joke/punchline). NOT what you see in the image. NOT "Before X vs After X" or direct brand tagline. Think: "When your skin finally stops betraying you", "POV: You found the one product that works", "Nobody: ... Me at 2am: applying the 5th serum."
+2. image_prompt: Scene illustrating the product/situation. Real photo style. No text in image.
+3. negative_prompt: "text, watermark, blurry, low quality, distorted"
+4. text_position: "bottom"
+5. keywords, use_cases, intent, template_slots: optional.
    - distracted_boyfriend: {"subject": "...", "old_option": "...", "new_option": "..."}
    - drake_hotline: {"nope": "...", "yep": "..."}
    - two_buttons: {"option_1": "...", "option_2": "..."}
@@ -83,8 +86,13 @@ Guidelines:
    - hands_up_opinion: {"opinion": "..."}
    - woman_yelling_cat: {"yelling_woman": "...", "confused_cat": "..."}
 
-Example:
-{"image_prompt": "A surprised cat looking at a laptop", "negative_prompt": "text, blurry", "caption": "When the code works on the first try", "text_position": "bottom", "keywords": ["coding", "luck", "surprise"], "use_cases": ["satisfaction"], "intent": "relief", "template_slots": {}}"""
+Example (funny caption, not ad copy):
+{"image_prompt": "Actual photograph of a person at a desk staring at a laptop with mouth open in shock, one hand on chest, candid reaction", "negative_prompt": "text, blurry", "caption": "When the code runs on the first try", "text_position": "bottom", "keywords": ["coding", "luck"], "use_cases": ["satisfaction"], "intent": "relief", "template_slots": {}}"""
+
+    CAPTION_ONLY_SYSTEM_PROMPT = """You are a meme copywriter. Write ONE short, FUNNY meme caption (under 80 characters)—a relatable joke or punchline, like viral internet memes. Do NOT describe the image. Do NOT write a direct ad line or "before/after [brand]". Use indirect humor (e.g. "When...", "POV:", "Nobody: ... Me:") that fits the product type without naming the brand in a tagline.
+
+IMPORTANT: Respond with ONLY a valid JSON object: {"caption": "your caption here"}
+No markdown, no explanation."""
 
     LIGHT_MODE_SYSTEM_PROMPT = """You are an AI meme assistant. Your task is to fill the text slots for a specific meme template based on a product description.
 
@@ -189,10 +197,10 @@ Guidelines:
         """
         return f"""{self.SYSTEM_PROMPT}
 
-Company/Product Description:
+Company/Product Description (the meme MUST be only about this):
 {company_description}
 
-Generate a meme concept for this company. Respond with ONLY the JSON object:"""
+Create a funny meme that is SPECIFICALLY about this product/company only. The image_prompt must describe a scene that clearly involves or references this product (e.g. the product in frame, people using it, or a situation about it). The caption must be a joke about this product or its users—not a generic scene description. Respond with ONLY the JSON object:"""
 
     def _get_fallback_image_prompt(self, company_description: str, caption: str = "") -> str:
         """
@@ -547,6 +555,50 @@ Generate filling for the slots and a catchy caption. Respond with ONLY JSON:"""
         except Exception as e:
             logger.error(f"Light-mode LLaMA call failed: {e}")
             raise LlamaServiceError(f"Failed to fill slots for template {template_id}: {str(e)}")
+
+    async def generate_caption(self, company_description: str) -> str:
+        """
+        Generate only a meme caption using LLaMA (no image prompt or template).
+        Used when the image is generated elsewhere (e.g. Puter) and we only need the caption.
+
+        Returns:
+            str: A short, funny meme caption (max 150 chars).
+        """
+        if not self.settings.LLAMA_API_URL:
+            raise LlamaConnectionError(
+                "LLAMA_API_URL is not configured. Set it in .env to use LLaMA for captions."
+            )
+        prompt = f"""{self.CAPTION_ONLY_SYSTEM_PROMPT}
+
+Company/Product Description:
+{company_description}
+
+Respond with ONLY the JSON object:"""
+        payload = self._build_request_payload(prompt)
+        headers = self._get_auth_headers()
+        try:
+            async with httpx.AsyncClient(timeout=self.settings.LLAMA_TIMEOUT) as client:
+                response = await client.post(
+                    self.settings.LLAMA_API_URL,
+                    headers=headers,
+                    json=payload,
+                )
+                if response.status_code != 200:
+                    raise LlamaResponseError(
+                        f"LLaMA API returned status {response.status_code}: {response.text[:200]}"
+                    )
+                response_data = response.json()
+                generated_text = self._parse_api_response(response_data)
+                json_data = self._extract_json_from_response(generated_text)
+                caption = json_data.get("caption", "").strip()
+                if not caption:
+                    caption = f"Meme about {company_description[:40]}..."
+                return caption[:150]
+        except (LlamaConnectionError, LlamaResponseError, LlamaValidationError):
+            raise
+        except Exception as e:
+            logger.error(f"LLaMA caption-only call failed: {e}")
+            raise LlamaServiceError(f"Failed to generate caption: {str(e)}")
 
 
 # Convenience function for dependency injection

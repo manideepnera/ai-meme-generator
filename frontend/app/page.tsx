@@ -6,13 +6,13 @@ import { Header } from './components/Header';
 import { CompanyInputForm } from './components/CompanyInputForm';
 import { LoadingState } from './components/LoadingState';
 import { MemeResult } from './components/MemeResult';
-import { ErrorState } from './components/ErrorState';  // Added for error handling
+import { ErrorState } from './components/ErrorState';
 import {
   MemeGenerationResponse,
-  BackendMemeResponse,
   GenerationStep,
   LoadingState as LoadingStateType,
 } from '@/types';
+import { generateImageWithPuter } from '@/lib/puterMeme';
 
 // ============================================
 // ERROR STATE TYPE FOR API ERRORS
@@ -35,132 +35,102 @@ export default function Home() {
   // ============================================
   const [error, setError] = useState<ErrorInfo | null>(null);
 
-  const simulateProgress = (
-    stepSequence: GenerationStep[],
-    onComplete: () => void
-  ) => {
-    let currentStepIndex = 0;
-    const totalSteps = stepSequence.length;
-    const stepDuration = 1000; // 1 second per step
-
-    const interval = setInterval(() => {
-      if (currentStepIndex < totalSteps) {
-        const step = stepSequence[currentStepIndex];
-        const progress = ((currentStepIndex + 1) / totalSteps) * 100;
-
-        setLoadingState({
-          isLoading: true,
-          currentStep: step,
-          progress,
-        });
-
-        currentStepIndex++;
-      } else {
-        clearInterval(interval);
-        onComplete();
-      }
-    }, stepDuration);
-  };
-
   const handleGenerate = async (description: string) => {
     setCurrentDescription(description);
     setResult(null);
-    // ============================================
-    // CLEAR PREVIOUS ERROR ON NEW REQUEST
-    // ============================================
     setError(null);
 
-    // Start loading state
     setLoadingState({
       isLoading: true,
       currentStep: 'understanding',
-      progress: 0,
+      progress: 10,
     });
 
-    // Simulate step-by-step progress
-    const steps: GenerationStep[] = [
-      'understanding',
-      'generating-image',
-      'adding-caption',
-    ];
-
-    simulateProgress(steps, async () => {
-      try {
-        // ============================================
-        // Call Next.js API route (uses NEXT_PUBLIC_BACKEND_URL in production)
-        // ============================================
-        const response = await fetch('/api/generate-meme', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            companyDescription: description,
-          }),
-        });
-
-        // ============================================
-        // ERROR HANDLING FOR API RESPONSE
-        // ============================================
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMsg = errorData.detail?.message || errorData.error || `Request failed with status ${response.status}`;
-          throw new Error(errorMsg);
-        }
-
-        const backendData: BackendMemeResponse = await response.json();
-
-        // ============================================
-        // NORMALIZE RESPONSE FOR UI
-        // ============================================
-        // Backend may send image_url OR image_base64. image_base64 can be
-        // either raw base64 or already a data URI (e.g. from Stable Diffusion).
-        let imageUrl: string;
-        if (backendData.image_url) {
-          imageUrl = backendData.image_url;
-        } else if (backendData.image_base64) {
-          imageUrl = backendData.image_base64.startsWith('data:')
-            ? backendData.image_base64
-            : `data:image/png;base64,${backendData.image_base64}`;
-        } else {
-          imageUrl = '';
-        }
-
-        const normalizedData: MemeGenerationResponse = {
-          imageUrl,
-          caption: backendData.caption,
-          memeIdea: '', // Kept for UI compatibility
-          textPosition: backendData.text_position,
-        };
-
-        // Set result and complete
-        setLoadingState({
-          isLoading: false,
-          currentStep: 'complete',
-          progress: 100,
-        });
-
-        setResult(normalizedData);
-      } catch (err) {
-        // ============================================
-        // CATCH AND DISPLAY ERRORS TO USER
-        // ============================================
-        console.error('Error generating meme:', err);
-
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-
-        setError({
-          message: 'Failed to generate meme',
-          details: errorMessage,
-        });
-
-        setLoadingState({
-          isLoading: false,
-          currentStep: 'error',
-          progress: 0,
-        });
+    try {
+      // 1) LLaMA: funny meme concept (caption + image prompt that illustrates the joke)
+      setLoadingState({
+        isLoading: true,
+        currentStep: 'understanding',
+        progress: 20,
+      });
+      const conceptRes = await fetch('/api/generate-meme-concept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyDescription: description }),
+      });
+      if (!conceptRes.ok) {
+        const errData = await conceptRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate meme concept');
       }
-    });
+      const concept = await conceptRes.json();
+      const { caption, image_prompt: imagePrompt } = concept;
+      if (!caption || !imagePrompt) {
+        throw new Error('Invalid meme concept from server');
+      }
+
+      setLoadingState({
+        isLoading: true,
+        currentStep: 'generating-image',
+        progress: 45,
+      });
+      // 2) Puter: generate image from LLaMA's scene; prepend product so image stays on-topic
+      const imagePromptWithProduct = `Meme about this product: "${description.slice(0, 100)}". Scene to draw: ${imagePrompt}`;
+      const imageBase64 = await generateImageWithPuter(imagePromptWithProduct);
+
+      const puterResult = { imageBase64, caption };
+
+      setLoadingState({
+        isLoading: true,
+        currentStep: 'adding-caption',
+        progress: 85,
+      });
+
+      // Overlay caption on image via backend (no API key needed)
+      const overlayRes = await fetch('/api/overlay-caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_base64: puterResult.imageBase64,
+          caption: puterResult.caption,
+        }),
+      });
+
+      if (!overlayRes.ok) {
+        const errData = await overlayRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Caption overlay failed');
+      }
+
+      const overlayData = await overlayRes.json();
+      const imageUrl = overlayData.image_base64?.startsWith('data:')
+        ? overlayData.image_base64
+        : `data:image/png;base64,${overlayData.image_base64 || ''}`;
+
+      const normalizedData: MemeGenerationResponse = {
+        imageUrl,
+        caption: puterResult.caption,
+        memeIdea: '',
+        textPosition: 'bottom',
+      };
+
+      setLoadingState({
+        isLoading: false,
+        currentStep: 'complete',
+        progress: 100,
+      });
+      setResult(normalizedData);
+    } catch (err) {
+      console.error('Error generating meme:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError({
+        message: 'Failed to generate meme',
+        details: errorMessage,
+      });
+      setLoadingState({
+        isLoading: false,
+        currentStep: 'error',
+        progress: 0,
+      });
+    }
   };
 
   const handleRegenerate = () => {
@@ -220,7 +190,7 @@ export default function Home() {
         {/* Footer */}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            Powered by AI • LLaMA, Stable Diffusion & BLIP
+            Powered by • LLaMA, Stable Diffusion & BLIP
           </p>
         </footer>
       </div>
