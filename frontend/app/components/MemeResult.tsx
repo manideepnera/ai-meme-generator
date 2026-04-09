@@ -17,6 +17,7 @@ export const MemeResult: React.FC<MemeResultProps> = ({
     const [copiedCaption, setCopiedCaption] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isInsightOpen, setIsInsightOpen] = useState(false);
+    const hasImage = Boolean(result.imageUrl && result.imageUrl.trim() !== '');
 
     const handleCopyCaption = async () => {
         try {
@@ -29,6 +30,11 @@ export const MemeResult: React.FC<MemeResultProps> = ({
     };
 
     const handleDownload = async () => {
+        if (!hasImage) {
+            alert('No generated image is available to download yet.');
+            return;
+        }
+
         setIsDownloading(true);
         try {
             const imageUrl = result.imageUrl;
@@ -96,12 +102,16 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                 <div className={styles.imageWrapper}>
                     <div className={styles.imageContainer}>
                         {/* Using native img to support base64 data URIs from backend */}
-                        <img
-                            src={result.imageUrl}
-                            alt="Generated meme"
-                            className={styles.image}
-                            style={{ width: '100%', height: 'auto', maxWidth: '600px' }}
-                        />
+                        {hasImage ? (
+                            <img
+                                src={result.imageUrl}
+                                alt="Generated meme"
+                                className={styles.image}
+                                style={{ width: '100%', height: 'auto', maxWidth: '600px' }}
+                            />
+                        ) : (
+                            <p className={styles.caption}>Image unavailable for this generation.</p>
+                        )}
                     </div>
                 </div>
 
@@ -195,7 +205,7 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                     <button
                         className={`${styles.actionButton} ${styles.downloadButton}`}
                         onClick={handleDownload}
-                        disabled={isDownloading}
+                        disabled={isDownloading || !hasImage}
                     >
                         {isDownloading ? (
                             <>

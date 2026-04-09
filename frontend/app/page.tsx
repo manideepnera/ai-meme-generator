@@ -9,7 +9,6 @@ import { MemeResult } from './components/MemeResult';
 import { ErrorState } from './components/ErrorState';  // Added for error handling
 import {
   MemeGenerationResponse,
-  BackendMemeResponse,
   GenerationStep,
   LoadingState as LoadingStateType,
 } from '@/types';
@@ -108,29 +107,40 @@ export default function Home() {
           throw new Error(errorMsg);
         }
 
-        const backendData: BackendMemeResponse = await response.json();
+        // Next.js /api/generate-meme returns MemeGenerationResponse (camelCase).
+        // If you ever call FastAPI directly, it may return snake_case instead.
+        const raw = (await response.json()) as Record<string, unknown>;
 
-        // ============================================
-        // NORMALIZE RESPONSE FOR UI
-        // ============================================
-        // Backend may send image_url OR image_base64. image_base64 can be
-        // either raw base64 or already a data URI (e.g. from Stable Diffusion).
-        let imageUrl: string;
-        if (backendData.image_url) {
-          imageUrl = backendData.image_url;
-        } else if (backendData.image_base64) {
-          imageUrl = backendData.image_base64.startsWith('data:')
-            ? backendData.image_base64
-            : `data:image/png;base64,${backendData.image_base64}`;
-        } else {
-          imageUrl = '';
+        let imageUrl = '';
+        if (typeof raw.imageUrl === 'string' && raw.imageUrl.trim()) {
+          imageUrl = raw.imageUrl.trim();
+        } else if (typeof raw.image_url === 'string' && raw.image_url.trim()) {
+          imageUrl = raw.image_url.trim();
+        } else if (typeof raw.image_base64 === 'string' && raw.image_base64.trim()) {
+          const b64 = raw.image_base64.trim();
+          imageUrl = b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`;
         }
+
+        if (!imageUrl) {
+          throw new Error('Backend response did not include image data');
+        }
+
+        const caption =
+          typeof raw.caption === 'string' ? raw.caption : '';
+        const textPosition =
+          raw.textPosition === 'top' || raw.textPosition === 'bottom'
+            ? raw.textPosition
+            : raw.text_position === 'top' || raw.text_position === 'bottom'
+              ? raw.text_position
+              : 'bottom';
+        const memeIdea =
+          typeof raw.memeIdea === 'string' ? raw.memeIdea : '';
 
         const normalizedData: MemeGenerationResponse = {
           imageUrl,
-          caption: backendData.caption,
-          memeIdea: '', // Kept for UI compatibility
-          textPosition: backendData.text_position,
+          caption,
+          memeIdea,
+          textPosition,
         };
 
         // Set result and complete

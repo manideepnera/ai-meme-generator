@@ -5,7 +5,6 @@ This module handles all environment variable loading and configuration settings.
 All external dependencies (API URLs, tokens, secrets) are configured here.
 """
 
-import os
 from functools import lru_cache
 from typing import Optional
 
@@ -110,7 +109,7 @@ class Settings(BaseSettings):
     # TODO: Update CORS_ORIGINS with your frontend URL(s)
     # In production, replace with your actual frontend domain(s)
     # Example: "https://your-frontend.com,https://www.your-frontend.com"
-    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS")
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     
     @property
     def cors_origins_list(self) -> list[str]:
@@ -122,6 +121,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"
 
 
 @lru_cache()
