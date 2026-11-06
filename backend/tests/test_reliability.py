@@ -112,3 +112,75 @@ async def test_api_does_not_generate_an_image_when_no_template_matches():
 
     assert error.value.status_code == 422
     assert error.value.detail["error"] == "no_suitable_template"
+
+
+
+@pytest.mark.asyncio
+async def test_gemini_rewrites_overlong_template_captions_instead_of_truncating(monkeypatch):
+    from app.services.gemini import GeminiService
+
+    service = GeminiService()
+    responses = [
+        {
+            "template_slots": {
+                "left": "Me, laser-focused on work",
+                "right": "HydroTrack showing zero ounces after a very long day",
+            },
+            "caption": "Hydration reminder",
+        },
+        {
+            "template_slots": {
+                "left": "Me, locked in on work",
+                "right": "HydroTrack: 0 oz. All day.",
+            },
+            "caption": "Hydration reminder",
+        },
+    ]
+    calls = []
+
+    async def fake_generate_json(prompt):
+        calls.append(prompt)
+        return responses.pop(0)
+
+    monkeypatch.setattr(service, "_generate_json", fake_generate_json)
+
+    slots, caption = await service.generate_template_slots(
+        template_id="monkey_puppet",
+        template_name="Monkey Puppet",
+        slot_keys=["left", "right"],
+        company_description="HydroTrack smart hydration bottle",
+        slot_limits={"left": 24, "right": 25},
+    )
+
+    assert slots == {
+        "left": "Me, locked in on work",
+        "right": "HydroTrack: 0 oz. All day.",
+    }
+    assert caption == "Hydration reminder"
+    assert len(calls) == 2
+    assert "REPAIR REQUIRED" in calls[1]
+
+
+@pytest.mark.asyncio
+async def test_gemini_rejects_captions_that_remain_over_slot_limit(monkeypatch):
+    from app.services.gemini import GeminiService
+    from app.services.llama import LlamaServiceError
+
+    service = GeminiService()
+
+    async def fake_generate_json(_prompt):
+        return {
+            "template_slots": {"top": "This caption is much too long"},
+            "caption": "Too long",
+        }
+
+    monkeypatch.setattr(service, "_generate_json", fake_generate_json)
+
+    with pytest.raises(LlamaServiceError, match="exceed slot limits"):
+        await service.generate_template_slots(
+            template_id="change_my_mind",
+            template_name="Change My Mind",
+            slot_keys=["top"],
+            company_description="A test product",
+            slot_limits={"top": 12},
+        )
