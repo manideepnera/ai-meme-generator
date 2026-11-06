@@ -1,0 +1,31 @@
+name: Backend reliability tests
+
+on:
+  push:
+    branches:
+      - reliability-first
+  pull_request:
+    branches:
+      - reliability-first
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run offline reliability tests
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests/test_reliability.py
