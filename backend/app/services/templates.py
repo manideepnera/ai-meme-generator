@@ -105,6 +105,12 @@ class TemplateService:
         except Exception as e:
             logger.error(f"Failed to load template index: {e}")
 
+    def get_template_profile(self, template_id: str) -> Dict[str, Any]:
+        """Return the curated semantic profile for a template."""
+        if not self.intelligence:
+            return {}
+        return self.intelligence.profiles.get(template_id, {})
+
     def rank_templates(self, concept: LlamaOutput) -> List[Dict[str, Any]]:
         """Return semantic template candidates with scores and human-readable reasons."""
         if not self.intelligence:
