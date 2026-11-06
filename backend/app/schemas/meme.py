@@ -28,9 +28,9 @@ class MemeGenerateRequest(BaseModel):
     orchestrates the meme generation process.
     """
     
-    use_llama: bool = Field(
-        True,
-        description="Try LLaMA first and automatically use Gemini if it fails. When false, use the local concept fallback."
+    use_llama: Optional[bool] = Field(
+        None,
+        description="Deprecated compatibility field. Generation always uses Gemini."
     )
 
     company_description: str = Field(
@@ -113,7 +113,15 @@ class MemeGenerateResponse(BaseModel):
 
     ai_provider: Optional[str] = Field(
         None,
-        description="AI provider used to generate the meme captions: llama, gemini, or local"
+        description="AI provider used to generate the meme: gemini"
+    )
+
+    joke_candidate_count: Optional[int] = Field(
+        None, description="Number of complete joke candidates evaluated"
+    )
+
+    joke_selection_reason: Optional[str] = Field(
+        None, description="Why the selected joke candidate was preferred"
     )
     
     @field_validator("image_url", "image_base64")
