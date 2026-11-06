@@ -20,14 +20,7 @@ from app.schemas.meme import (
     ErrorResponse,
     TextPosition,
 )
-from app.services.llama import (
-    LlamaService,
-    LlamaServiceError,
-    LlamaConnectionError,
-    LlamaResponseError,
-    LlamaValidationError,
-    get_llama_service,
-)
+from app.services.llama import LlamaService, get_llama_service
 from app.services.templates import (
     TemplateService,
     get_template_service,
@@ -199,34 +192,28 @@ async def health_check():
 )
 async def readiness_check(
     llama_service: Annotated[LlamaService, Depends(get_llama_service)],
-    colab_service: Annotated[ColabService, Depends(get_colab_service)],
+    template_service: Annotated[TemplateService, Depends(get_template_service)],
 ):
-    """
-    Readiness check that verifies configuration is loaded.
-    
-    Note: This does NOT make actual calls to LLaMA or Colab.
-    It only checks if the required configuration is present.
-    
-    Returns:
-        dict: Readiness status with configuration info
-    """
+    """Check that the concept service and local template library are available."""
     from app.config import get_settings
     settings = get_settings()
-    
+
     llama_configured = bool(settings.LLAMA_API_URL)
-    colab_configured = bool(settings.COLAB_API_URL)
-    
+    templates_loaded = bool(template_service.templates)
+    catalog_loaded = bool(template_service.intelligence)
+
     return {
-        "status": "ready" if (llama_configured and colab_configured) else "not_ready",
+        "status": "ready" if templates_loaded and catalog_loaded else "not_ready",
         "configuration": {
             "llama_api_configured": llama_configured,
-            "colab_api_configured": colab_configured,
-            "llama_auth_type": settings.LLAMA_AUTH_TYPE,
+            "template_count": len(template_service.templates),
+            "template_intelligence_loaded": catalog_loaded,
         },
         "warnings": [
-            msg for msg in [
-                None if llama_configured else "LLAMA_API_URL not configured",
-                None if colab_configured else "COLAB_API_URL not configured",
-            ] if msg
-        ]
+            message for message in [
+                None if llama_configured else "LLAMA_API_URL not configured; local concept fallback will be used",
+                None if templates_loaded else "No meme templates were loaded",
+                None if catalog_loaded else "Template intelligence catalog is missing",
+            ] if message
+        ],
     }
