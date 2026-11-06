@@ -59,9 +59,10 @@ class Settings(BaseSettings):
     # Timeout for LLaMA API calls (in seconds)
     LLAMA_TIMEOUT: int = 60
 
-    # Google Gemini fallback (Google AI Studio API key)
+    # Google Gemini API (Google AI Studio)
     GOOGLE_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TIMEOUT: int = 60
     
     # ==========================================================================
     # GOOGLE COLAB SETTINGS
