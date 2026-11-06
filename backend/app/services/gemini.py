@@ -85,7 +85,15 @@ class GeminiService:
         template_purpose: str = "",
         narrative_pattern: str = "",
         slot_meanings: Optional[Dict[str, str]] = None,
+        slot_limits: Optional[Dict[str, int]] = None,
     ) -> Tuple[Dict[str, str], str]:
+        """Generate concise, template-aware captions and validate every slot."""
+        limits = slot_limits or {}
+        limit_instructions = "\\n".join(
+            f"- {key}: maximum {limits[key]} characters"
+            for key in slot_keys if key in limits
+        ) or "- Keep each slot to 2-8 words."
+
         prompt = f"""{self.prompt_builder.LIGHT_MODE_SYSTEM_PROMPT}
 
 Meme Template: {template_name} ({template_id})
@@ -94,17 +102,47 @@ Narrative pattern: {narrative_pattern}
 Required slots and their exact meanings:
 {json.dumps(slot_meanings or {}, ensure_ascii=False)}
 Required slot keys: {", ".join(slot_keys)}
+STRICT SLOT LENGTH LIMITS:
+{limit_instructions}
 
 Product/Company Description and user requirements:
 {company_description}
 
-Generate a coherent joke that follows this template's narrative pattern.
-Each slot must fulfil its stated role. Keep every slot concise, natural, readable,
-and directly related to the product. Make all slots work together as one joke.
-Return every required slot key exactly once, plus a short caption. JSON only:"""
-        data = await self._generate_json(prompt)
-        slots = data.get("template_slots", {})
-        return (
-            {key: str(slots.get(key, "")).strip() for key in slot_keys},
-            str(data.get("caption", f"Meme for {template_name}")).strip(),
+Write one natural, funny, product-specific joke that follows this template's narrative.
+Each slot must fulfil its exact role and read naturally with the other slots.
+Use short phrases, not long sentences. Do not use ellipses, filler, or quotation marks.
+Never exceed a slot's character limit. Return every required key exactly once and
+include a short caption. Return valid JSON only."""
+
+        # A second generation is allowed only to repair invalid/overlong slot text.
+        for attempt in range(2):
+            data = await self._generate_json(prompt)
+            raw_slots = data.get("template_slots", {})
+            slots = {
+                key: str(raw_slots.get(key, "")).strip()
+                for key in slot_keys
+            }
+            invalid = [
+                key for key, value in slots.items()
+                if not value or (key in limits and len(value) > limits[key])
+                or value.endswith("...")
+            ]
+            if not invalid:
+                caption = str(data.get("caption", f"Meme for {template_name}")).strip()
+                return slots, caption
+
+            if attempt == 0:
+                violations = ", ".join(
+                    f"{key} ({len(slots[key])}/{limits.get(key, 'non-empty')} chars)"
+                    for key in invalid
+                )
+                prompt += (
+                    "\\n\\nREPAIR REQUIRED: Your previous response had invalid slots: "
+                    f"{violations}. Rewrite the entire joke with every slot within its "
+                    "strict limit. Prefer shorter wording; do not truncate words and "
+                    "do not use ellipses. Return JSON only."
+                )
+
+        raise LlamaServiceError(
+            f"Gemini returned captions that exceed slot limits or are empty for template {template_id}."
         )
