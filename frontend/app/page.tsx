@@ -30,6 +30,7 @@ export default function Home() {
   });
   const [result, setResult] = useState<MemeGenerationResponse | null>(null);
   const [currentDescription, setCurrentDescription] = useState('');
+  const [currentUseLlama, setCurrentUseLlama] = useState(true);
   // ============================================
   // ERROR STATE - Tracks API errors
   // ============================================
@@ -79,6 +80,7 @@ export default function Home() {
 
   const handleGenerate = async (description: string, useLlama = true) => {
     setCurrentDescription(description);
+    setCurrentUseLlama(useLlama);
     setResult(null);
     // ============================================
     // CLEAR PREVIOUS ERROR ON NEW REQUEST
@@ -141,6 +143,7 @@ export default function Home() {
           templateName: backendData.template_name,
           templateReason: backendData.template_reason,
           aiProvider: backendData.ai_provider,
+          aiProvider: backendData.ai_provider,
         };
 
         // Set result and complete
@@ -175,7 +178,7 @@ export default function Home() {
 
   const handleRegenerate = () => {
     if (currentDescription) {
-      handleGenerate(currentDescription);
+      handleGenerate(currentDescription, currentUseLlama);
     }
   };
 
