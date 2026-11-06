@@ -2,6 +2,7 @@ import base64
 from io import BytesIO
 
 import pytest
+from fastapi import HTTPException
 from PIL import Image
 
 from app.routes.meme import generate_meme
@@ -76,36 +77,29 @@ def test_every_registered_template_can_receive_all_required_slots():
 
 
 @pytest.mark.asyncio
-async def test_api_returns_local_png_when_both_remote_services_fail():
+async def test_api_does_not_generate_an_image_when_no_template_matches():
     class FailingLlama:
         async def generate_meme_concept(self, _description):
             raise RuntimeError("LLaMA unavailable")
 
-    class FailingColab:
-        async def generate_meme(self, _concept):
-            raise RuntimeError("Colab unavailable")
-
     class NoTemplateMatch:
-        def match_templates_by_keywords(self, _description):
-            return None
-
         def match_template(self, _concept):
             return None
 
-    response = await generate_meme(
-        request=MemeGenerateRequest(
-            company_description=(
-                "A mobile app that helps small businesses manage customer "
-                "orders and daily operations"
-            )
-        ),
-        llama_service=FailingLlama(),
-        colab_service=FailingColab(),
-        template_service=NoTemplateMatch(),
-    )
+        def rank_templates(self, _concept):
+            return [{"template_id": "drake_hotline", "score": 0.12}]
 
-    assert response.image_base64
-    image = _decode_png(response.image_base64)
-    assert image.format == "PNG"
-    assert image.size == (1080, 1080)
-    assert response.caption
+    with pytest.raises(HTTPException) as error:
+        await generate_meme(
+            request=MemeGenerateRequest(
+                company_description=(
+                    "A mobile app that helps small businesses manage customer "
+                    "orders and daily operations"
+                )
+            ),
+            llama_service=FailingLlama(),
+            template_service=NoTemplateMatch(),
+        )
+
+    assert error.value.status_code == 422
+    assert error.value.detail["error"] == "no_suitable_template"
