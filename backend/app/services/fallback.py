@@ -141,12 +141,12 @@ class FallbackMemeService:
     def _extract_topic(cls, description: str) -> str:
         text = cls._clean_text(description)
         text = re.sub(
-            r"^(?:(?:a|an|the)\\s+)?(?:(?:company|business|startup|brand)\\s+(?:that|which)\\s+)",
+            r"^(?:(?:a|an|the)\s+)?(?:(?:company|business|startup|brand)\s+(?:that|which)\s+)",
             "",
             text,
             flags=re.IGNORECASE,
         )
-        text = re.sub(r"^(?:a|an|the)\\s+", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"^(?:a|an|the)\s+", "", text, flags=re.IGNORECASE)
         text = re.split(r"[.!?\n]", text, maxsplit=1)[0].strip(" ,;:-")
         words = text.split()
         topic = " ".join(words[:10]).strip()
