@@ -78,7 +78,7 @@ def test_every_registered_template_can_receive_all_required_slots():
 
 @pytest.mark.asyncio
 async def test_api_does_not_generate_an_image_when_no_template_matches():
-    class WorkingLlama:
+    class WorkingGemini:
         async def generate_meme_concept(self, _description):
             return LlamaOutput(
                 image_prompt="A funny scene about a small-business operations app",
@@ -106,7 +106,7 @@ async def test_api_does_not_generate_an_image_when_no_template_matches():
                     "orders and daily operations"
                 )
             ),
-            llama_service=WorkingLlama(),
+            gemini_service=WorkingGemini(),
             template_service=NoTemplateMatch(),
         )
 
