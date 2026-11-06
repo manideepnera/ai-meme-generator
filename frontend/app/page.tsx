@@ -30,22 +30,23 @@ export default function Home() {
   });
   const [result, setResult] = useState<MemeGenerationResponse | null>(null);
   const [currentDescription, setCurrentDescription] = useState('');
-  const [currentUseLlama, setCurrentUseLlama] = useState(true);
+  
   // ============================================
   // ERROR STATE - Tracks API errors
   // ============================================
   const [error, setError] = useState<ErrorInfo | null>(null);
-  const [providerReadiness, setProviderReadiness] = useState<{ llama: boolean; gemini: boolean } | null>(null);
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const checkReadiness = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/health/ready');
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiBase}/api/v1/health/ready`);
         if (!response.ok) return;
         const data = await response.json();
-        if (!cancelled) setProviderReadiness({ llama: Boolean(data.configuration?.llama_api_configured), gemini: Boolean(data.configuration?.gemini_api_configured) });
-      } catch { if (!cancelled) setProviderReadiness(null); }
+        if (!cancelled) setGeminiConfigured(Boolean(data.configuration?.gemini_api_configured));
+      } catch { if (!cancelled) setGeminiConfigured(null); }
     };
     checkReadiness();
     return () => { cancelled = true; };
@@ -78,9 +79,8 @@ export default function Home() {
     }, stepDuration);
   };
 
-  const handleGenerate = async (description: string, useLlama = true) => {
+  const handleGenerate = async (description: string) => {
     setCurrentDescription(description);
-    setCurrentUseLlama(useLlama);
     setResult(null);
     // ============================================
     // CLEAR PREVIOUS ERROR ON NEW REQUEST
@@ -116,7 +116,6 @@ export default function Home() {
           },
           body: JSON.stringify({
             company_description: description,
-            use_llama: useLlama
           }),
         });
 
@@ -177,7 +176,7 @@ export default function Home() {
 
   const handleRegenerate = () => {
     if (currentDescription) {
-      handleGenerate(currentDescription, currentUseLlama);
+      handleGenerate(currentDescription);
     }
   };
 
@@ -204,7 +203,7 @@ export default function Home() {
         <CompanyInputForm
           onGenerate={handleGenerate}
           isLoading={loadingState.isLoading}
-          providerReadiness={providerReadiness}
+          geminiConfigured={geminiConfigured}
         />
 
         {loadingState.isLoading && (
@@ -233,7 +232,7 @@ export default function Home() {
         {/* Footer */}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            Existing meme templates • LLaMA primary • Gemini automatic backup
+            Gemini-powered joke generation • Hybrid template matching • Existing meme templates
           </p>
         </footer>
       </div>
