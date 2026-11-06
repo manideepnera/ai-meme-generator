@@ -244,3 +244,11 @@
 .modeOn, .modeOff { min-width: 30px; font-size: .72rem; font-weight: 800; letter-spacing: .04em; }
 .modeOn { color: #16a34a; }
 .modeOff { color: var(--text-muted); }
+
+
+.providerStatus {
+    display: block;
+    margin-top: 6px;
+    color: #a1a1aa;
+    font-size: 12px;
+}
