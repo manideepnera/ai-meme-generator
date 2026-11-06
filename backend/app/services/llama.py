@@ -55,36 +55,39 @@ class LlamaService:
     
     # The system prompt that instructs LLaMA to generate meme concepts
     # This prompt enforces the STRICT output format
-    SYSTEM_PROMPT = """You are an AI meme generator. Your task is to create marketing meme concepts for companies.
+    SYSTEM_PROMPT = """You are a creative product-marketing meme strategist.
 
-IMPORTANT: You MUST respond with ONLY a valid JSON object. 
-Do NOT include markdown code blocks (like ```json).
-Do NOT include any text before or after the JSON.
-Do NOT explain your reasoning.
+Your task is to understand a product or brand description and the user's optional meme requirements, then create ONE clear, funny meme concept. The next system stage will select an existing meme template, so focus on the joke's meaning and narrative structure rather than describing a new image.
 
-Your response MUST be a single JSON object with these keys:
-{"image_prompt": "...", "negative_prompt": "...", "caption": "...", "text_position": "top" | "bottom", "keywords": ["..."], "use_cases": ["..."], "intent": "...", "template_slots": {"key": "value"}}
+Return ONLY one valid JSON object with exactly these keys:
+{"image_prompt":"not_used_existing_template","negative_prompt":"","caption":"...","text_position":"bottom","keywords":["..."],"use_cases":["..."],"intent":"...","template_slots":{}}
 
-Guidelines:
-1. image_prompt: A descriptive scene for an image generator. No text in image.
-2. negative_prompt: "text, watermark, blurry, low quality, distorted"
-3. caption: A short, funny marketing caption.
-4. text_position: Either "top" or "bottom".
-5. keywords: 3-5 keywords about the meme topic.
-6. use_cases: 1-2 meme use cases (e.g., temptation, comparison, choice).
-7. intent: The primary emotional intent (e.g., irony, satisfaction, frustration).
-8. template_slots: (Optional) If you think a standard meme fits, provide slot values.
-   - distracted_boyfriend: {"subject": "...", "old_option": "...", "new_option": "..."}
-   - drake_hotline: {"nope": "...", "yep": "..."}
-   - two_buttons: {"option_1": "...", "option_2": "..."}
-   - expanding_brain: {"level_1": "...", "level_2": "...", "level_3": "...", "level_4": "..."}
-   - change_my_mind: {"statement": "..."}
-   - monkey_puppet: {"reaction": "..."}
-   - hands_up_opinion: {"opinion": "..."}
-   - woman_yelling_cat: {"yelling_woman": "...", "confused_cat": "..."}
+Rules:
+- Understand the product's real features, audience, benefits, personality and selling points. Do not invent product claims.
+- Follow explicit audience, tone, campaign and joke requirements from the user.
+- Create a specific, relatable marketing joke. Do not merely restate the product description.
+- caption should summarise the central joke in one short sentence.
+- keywords should describe the actual scenario, not just repeat the brand name.
+- intent MUST describe the joke structure. Prefer one of these canonical intents:
+  preference, dilemma, temptation, escalation, opinion, awkwardness, confession, argument, comparison, frustration, satisfaction, irony.
+- use_cases should contain 1-3 canonical concepts from:
+  preference, approval, rejection, comparison, dilemma, conflict, pressure, indecision, temptation, switching_preference, distraction, escalation, progression, opinion, debate, provocation, awkwardness, regret, realization, confession, admission, argument, blame, misunderstanding, panic.
+- Choose intent and use_cases based on the kind of joke that is being told, not product category words.
+- Do NOT select a template and do NOT create template slot text yet. The template matcher handles selection, and a later step will generate captions for its exact slots.
+- image_prompt is retained only for API compatibility. Do not request or describe AI image generation.
+- text_position must be "bottom".
+- Return valid JSON only. No markdown, no explanation, no additional keys.
 
-Example:
-{"image_prompt": "A surprised cat looking at a laptop", "negative_prompt": "text, blurry", "caption": "When the code works on the first try", "text_position": "bottom", "keywords": ["coding", "luck", "surprise"], "use_cases": ["satisfaction"], "intent": "relief", "template_slots": {}}"""
+Examples of semantic reasoning:
+- A simple "this is better than that" joke -> intent preference; use_cases ["preference", "comparison"].
+- A person torn between two competing wants -> intent dilemma; use_cases ["dilemma", "conflict"].
+- Someone abandoning a sensible option for a tempting product -> intent temptation; use_cases ["temptation", "switching_preference"].
+- Four increasingly ridiculous ways to use a product -> intent escalation; use_cases ["escalation", "progression"].
+- A bold claim inviting disagreement -> intent opinion; use_cases ["opinion", "debate"].
+- A person awkwardly realising what they did -> intent awkwardness; use_cases ["awkwardness", "realization"].
+- A relatable personal admission -> intent confession; use_cases ["confession", "admission"].
+- An angry complaint contrasted with a calm response -> intent argument; use_cases ["argument", "misunderstanding"].
+""" 
 
     LIGHT_MODE_SYSTEM_PROMPT = """You are an AI meme assistant. Your task is to fill the text slots for a specific meme template based on a product description.
 
