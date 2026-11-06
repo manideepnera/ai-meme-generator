@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import styles from './CompanyInputForm.module.css';
 
 interface CompanyInputFormProps {
-    onGenerate: (description: string) => void;
+    onGenerate: (description: string, useLlama: boolean) => void;
     isLoading: boolean;
 }
 
@@ -13,12 +13,12 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
     isLoading,
 }) => {
     const [description, setDescription] = useState('');
-    const [isFocused, setIsFocused] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);\n    const [useLlama, setUseLlama] = useState(true);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (description.trim() && !isLoading) {
-            onGenerate(description.trim());
+            onGenerate(description.trim(), useLlama);
         }
     };
 
@@ -59,6 +59,28 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                             {description.length} characters (min 10)
                         </div>
                     </div>
+                </div>
+
+                <div className={styles.llamaControl}>
+                    <div className={styles.llamaControlText}>
+                        <span className={styles.llamaTitle}>Use LLaMA AI</span>
+                        <span className={styles.llamaDescription}>
+                            {useLlama ? 'Real model required. Errors will be shown; no silent fallback.' : 'LLaMA disabled. Use the local concept fallback.'}
+                        </span>
+                    </div>
+                    <label className={styles.switch}>
+                        <input
+                            type="checkbox"
+                            checked={useLlama}
+                            onChange={(event) => setUseLlama(event.target.checked)}
+                            disabled={isLoading}
+                            aria-label="Use LLaMA AI"
+                        />
+                        <span className={styles.switchSlider}></span>
+                    </label>
+                    <span className={useLlama ? styles.modeOn : styles.modeOff}>
+                        {useLlama ? 'ON' : 'OFF'}
+                    </span>
                 </div>
 
                 <button
