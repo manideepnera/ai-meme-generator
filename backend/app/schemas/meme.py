@@ -110,6 +110,11 @@ class MemeGenerateResponse(BaseModel):
         None,
         description="Short explanation of why the template was selected"
     )
+
+    ai_provider: Optional[str] = Field(
+        None,
+        description="AI provider used to generate the meme captions: llama, gemini, or local"
+    )
     
     @field_validator("image_url", "image_base64")
     @classmethod
