@@ -143,7 +143,6 @@ export default function Home() {
           templateName: backendData.template_name,
           templateReason: backendData.template_reason,
           aiProvider: backendData.ai_provider,
-          aiProvider: backendData.ai_provider,
         };
 
         // Set result and complete
