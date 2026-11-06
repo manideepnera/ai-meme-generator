@@ -1,6 +1,5 @@
 export interface MemeGenerationRequest {
     companyDescription: string;
-    useLlama: boolean;
 }
 
 export interface BackendMemeResponse {
@@ -12,7 +11,9 @@ export interface BackendMemeResponse {
     template_name?: string;
     template_score?: number;
     template_reason?: string;
-    ai_provider?: 'llama' | 'gemini' | 'local';
+    ai_provider?: 'gemini';
+    joke_candidate_count?: number;
+    joke_selection_reason?: string;
 }
 
 export interface MemeGenerationResponse {
@@ -22,7 +23,9 @@ export interface MemeGenerationResponse {
     textPosition: 'top' | 'bottom';
     templateName?: string;
     templateReason?: string;
-    aiProvider?: 'llama' | 'gemini' | 'local';
+    aiProvider?: 'gemini';
+    jokeCandidateCount?: number;
+    jokeSelectionReason?: string;
 }
 
 export type GenerationStep = 'idle' | 'understanding' | 'generating-image' | 'adding-caption' | 'complete' | 'error';
