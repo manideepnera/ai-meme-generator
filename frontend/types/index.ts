@@ -1,5 +1,5 @@
 export interface MemeGenerationRequest {
-    companyDescription: string;
+    companyDescription: string;\n    useLlama: boolean;
 }
 
 // ============================================
@@ -14,7 +14,7 @@ export interface BackendMemeResponse {
     image_url?: string;     // URL to the generated meme image (optional)
     image_base64?: string;  // Base64 encoded image data (optional)
     caption: string;        // Generated caption for the meme
-    text_position: 'top' | 'bottom';  // Position of caption text
+    text_position: 'top' | 'bottom';\n    template_id?: string;\n    template_name?: string;\n    template_score?: number;\n    template_reason?: string;  // Position of caption text
 }
 
 /**
