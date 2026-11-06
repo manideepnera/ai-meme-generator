@@ -62,7 +62,7 @@ export default function Home() {
     }, stepDuration);
   };
 
-  const handleGenerate = async (description: string) => {
+  const handleGenerate = async (description: string, useLlama = true) => {
     setCurrentDescription(description);
     setResult(null);
     // ============================================
@@ -98,7 +98,7 @@ export default function Home() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            company_description: description  // Backend expects snake_case
+            company_description: description,\n            use_llama: useLlama
           }),
         });
 
@@ -211,7 +211,7 @@ export default function Home() {
         {/* Footer */}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            Powered by AI • LLaMA, Stable Diffusion & BLIP
+            Existing meme templates • LLaMA-powered concept generation
           </p>
         </footer>
       </div>
