@@ -58,7 +58,7 @@ async def generate_meme(
     ranked = template_service.rank_templates(concept)
     shortlist = [
         item for item in ranked
-        if item.get("score", 0) >= 0.25
+        if item.get("score", 0) >= 0.25 and item.get("template_id") in template_service.templates
     ][:3]
     if not shortlist:
         raise HTTPException(
