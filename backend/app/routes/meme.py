@@ -1,12 +1,8 @@
 """
 Meme generation API routes.
 
-This module defines the REST API endpoints for meme generation.
-The backend acts purely as an orchestrator, coordinating between:
-1. Frontend (request) -> Backend
-2. Backend -> LLaMA (concept generation)
-3. Backend -> Colab (image generation)
-4. Backend -> Frontend (response)
+This module coordinates product understanding, semantic template selection,
+template-aware caption generation, and local rendering of existing meme images.
 """
 
 import logging
@@ -54,8 +50,8 @@ router = APIRouter(
             "description": "External service error (LLaMA or Colab)",
             "model": ErrorResponse,
         },
-        503: {
-            "description": "Service unavailable (cannot reach external services)",
+        422: {
+            "description": "No available template matches the concept confidently",
             "model": ErrorResponse,
         },
     },
@@ -172,11 +168,11 @@ async def generate_meme(
                 template_reason="; ".join(selected_match.get("reasons", [])),
             )
         else:
-            logger.info("No suitable template matched. Falling back to AI image generation.")
+            logger.info("No suitable existing template matched.")
             
     except Exception as e:
         logger.error(f"Template generation failed: {e}", exc_info=True)
-        logger.info("Falling back to AI image generation due to template error.")
+        logger.info("Template rendering failed; returning a structured error instead of generating a new image.")
 
     # ==========================================================================
     # STEP 3: Do not generate a new image when no template is suitable
