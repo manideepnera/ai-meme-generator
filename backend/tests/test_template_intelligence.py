@@ -65,3 +65,49 @@ def test_template_service_loads_semantic_profiles_and_exposes_rankings():
     assert ranked[0]["template_id"] == "distracted_boyfriend"
     assert service.get_template_profile("distracted_boyfriend")["slot_meanings"]["new_option"]
     assert service.match_template(concept).id == "distracted_boyfriend"
+
+
+@pytest.mark.asyncio
+async def test_product_concept_selects_and_renders_matching_existing_template():
+    from app.routes.meme import generate_meme
+    from app.schemas.meme import LlamaOutput, MemeGenerateRequest
+
+    class FakeLlama:
+        async def generate_meme_concept(self, _description):
+            return LlamaOutput(
+                image_prompt="not_used_existing_template",
+                negative_prompt="",
+                caption="When the cold drink wins every time",
+                text_position="bottom",
+                keywords=["summer", "heat", "cold drink", "craving"],
+                use_cases=["temptation", "switching_preference"],
+                intent="temptation",
+                template_slots={},
+            )
+
+        async def generate_template_slots(self, **kwargs):
+            assert kwargs["template_id"] == "distracted_boyfriend"
+            assert "tempting new alternative" in kwargs["template_purpose"]
+            return {
+                "subject": "Me",
+                "old_option": "Surviving summer",
+                "new_option": "Ice-cold Coca-Cola",
+            }, "Summer plans changed instantly"
+
+    service = TemplateService()
+    response = await generate_meme(
+        request=MemeGenerateRequest(
+            company_description=(
+                "Coca-Cola is a refreshing carbonated drink. Make a funny "
+                "summer meme for college students about ice-cold refreshment."
+            )
+        ),
+        llama_service=FakeLlama(),
+        template_service=service,
+    )
+
+    assert response.image_base64
+    assert response.template_id == "distracted_boyfriend"
+    assert response.template_name == "Distracted Boyfriend"
+    assert response.template_score and response.template_score >= 0.25
+    assert response.caption == "Summer plans changed instantly"
