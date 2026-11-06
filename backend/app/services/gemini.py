@@ -214,7 +214,8 @@ Return exactly {count} candidates. Every candidate must contain every required s
                         "caption": str(candidate.get("caption", "")).strip(),
                         "template_slots": slots,
                     })
-            if len(valid) >= count:
+            unique_ids = {item["id"] for item in valid}
+            if len(valid) >= count and len(unique_ids) == len(valid):
                 return valid[:count]
             if attempt == 0:
                 prompt += (
@@ -222,7 +223,7 @@ Return exactly {count} candidates. Every candidate must contain every required s
                     "All slot values must fit the exact limits. Invalid candidates: "
                     + "; ".join(problems)
                 )
-        raise GeminiError("Gemini could not produce the requested number of valid joke candidates.")
+        raise GeminiError("Gemini could not produce the requested number of distinct, valid joke candidates.")
 
     async def evaluate_joke_candidates(
         self, concept: LlamaOutput, candidates: List[Dict[str, Any]]
