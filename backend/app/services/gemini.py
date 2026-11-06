@@ -1,32 +1,57 @@
-"""Google Gemini fallback service for meme concept and template-caption generation."""
+"""Gemini-only orchestration for product understanding, template evaluation and joke writing."""
 
+import asyncio
 import json
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+import re
+from typing import Any, Dict, List, Optional
 
 import httpx
 
 from app.config import Settings, get_settings
 from app.schemas.meme import LlamaOutput
-from app.services.llama import LlamaService, LlamaServiceError
 
 logger = logging.getLogger(__name__)
 
 
+class GeminiError(RuntimeError):
+    """Raised when Gemini cannot return a valid, usable result."""
+
+
 class GeminiService:
-    """Call Gemini's generateContent API using a server-side API key."""
+    """Google Gemini client with bounded retries and strict application validation."""
+
+    RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or get_settings()
-        self.prompt_builder = LlamaService(self.settings)
 
     def _url(self) -> str:
-        model = self.settings.GEMINI_MODEL
-        return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        return (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.settings.GEMINI_MODEL}:generateContent"
+        )
+
+    @staticmethod
+    def _extract_json(text: str) -> dict:
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
+        try:
+            value = json.loads(cleaned)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", cleaned, flags=re.S)
+            if not match:
+                raise GeminiError("Gemini did not return a JSON object.")
+            try:
+                value = json.loads(match.group(0))
+            except json.JSONDecodeError as exc:
+                raise GeminiError("Gemini returned malformed JSON.") from exc
+        if not isinstance(value, dict):
+            raise GeminiError("Gemini response must be a JSON object.")
+        return value
 
     async def _generate_json(self, prompt: str) -> dict:
         if not self.settings.GOOGLE_API_KEY:
-            raise LlamaServiceError("GOOGLE_API_KEY is not configured.")
+            raise GeminiError("GOOGLE_API_KEY is not configured.")
 
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -35,37 +60,70 @@ class GeminiService:
                 "temperature": 0.8,
             },
         }
-        try:
-            async with httpx.AsyncClient(timeout=self.settings.LLAMA_TIMEOUT) as client:
-                response = await client.post(
-                    self._url(),
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": self.settings.GOOGLE_API_KEY,
-                    },
-                    json=payload,
-                )
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=self.settings.LLAMA_TIMEOUT) as client:
+                    response = await client.post(
+                        self._url(),
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": self.settings.GOOGLE_API_KEY,
+                        },
+                        json=payload,
+                    )
+                if response.status_code in self.RETRYABLE_STATUS_CODES:
+                    last_error = GeminiError(
+                        f"Gemini temporarily unavailable (HTTP {response.status_code})."
+                    )
+                    if attempt < 2:
+                        await asyncio.sleep(1 * (2 ** attempt))
+                        continue
+                    raise last_error
                 if response.status_code != 200:
-                    raise LlamaServiceError(
+                    raise GeminiError(
                         f"Gemini API returned HTTP {response.status_code}: {response.text[:300]}"
                     )
                 data = response.json()
-        except httpx.HTTPError as exc:
-            raise LlamaServiceError(f"Gemini API request failed: {exc}") from exc
-
-        try:
-            parts = data["candidates"][0]["content"]["parts"]
-            response_text = "".join(part.get("text", "") for part in parts)
-            return self.prompt_builder._extract_json_from_response(response_text)
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LlamaServiceError("Gemini returned no usable text candidate.") from exc
+                parts = data["candidates"][0]["content"]["parts"]
+                response_text = "".join(part.get("text", "") for part in parts)
+                return self._extract_json(response_text)
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(1 * (2 ** attempt))
+                    continue
+                raise GeminiError(f"Gemini request failed after retries: {exc}") from exc
+            except httpx.HTTPError as exc:
+                raise GeminiError(f"Gemini HTTP request failed: {exc}") from exc
+            except (KeyError, IndexError, TypeError) as exc:
+                raise GeminiError("Gemini returned no usable text candidate.") from exc
+        raise GeminiError(f"Gemini request failed: {last_error}")
 
     async def generate_meme_concept(self, company_description: str) -> LlamaOutput:
-        prompt = self.prompt_builder._build_prompt(company_description)
+        """Understand the product and produce structured meme intent, not image prompts."""
+        prompt = f"""
+You are the product strategist for a meme marketing system. Understand the product and user brief.
+Do not invent product capabilities. Separate factual product features from the humorous situation.
+Return JSON only with:
+image_prompt (string; use the literal value "existing_template_only"),
+negative_prompt (string; empty),
+caption (short description of the intended joke),
+text_position ("top" or "bottom"),
+keywords (5-10 concise semantic cues),
+use_cases (1-4 controlled narrative categories),
+intent (one primary narrative intent such as preference, dilemma, temptation, escalation,
+opinion, awkwardness, confession, argument, comparison, irony, realization),
+template_slots (empty object).
+Make intent and use_cases describe the joke structure, not merely the product category.
+
+USER BRIEF:
+{company_description}
+"""
         data = await self._generate_json(prompt)
-        data.setdefault("image_prompt", "not_used_existing_template")
+        data.setdefault("image_prompt", "existing_template_only")
         data.setdefault("negative_prompt", "")
-        data.setdefault("caption", f"Meme about {company_description[:40]}")
+        data.setdefault("caption", "A product-related meme")
         data.setdefault("text_position", "bottom")
         data.setdefault("keywords", [])
         data.setdefault("use_cases", [])
@@ -74,39 +132,33 @@ class GeminiService:
         try:
             return LlamaOutput(**data)
         except Exception as exc:
-            raise LlamaServiceError(f"Gemini concept did not match the required schema: {exc}") from exc
+            raise GeminiError(f"Gemini product brief failed schema validation: {exc}") from exc
 
-    async def evaluate_template_candidates(
-        self,
-        concept: LlamaOutput,
-        candidates: List[Dict[str, Any]],
+    async def evaluate_templates(
+        self, concept: LlamaOutput, candidates: List[Dict[str, Any]]
     ) -> Dict[str, str]:
-        """Choose the best narrative fit from a Python-ranked shortlist."""
-        if not candidates:
-            raise LlamaServiceError("No template candidates were supplied for evaluation.")
-        prompt = f"""You are an expert meme-format editor. Choose the single existing meme template
-that best communicates the supplied joke concept. Do not invent templates.
-Prefer narrative compatibility over keyword overlap. Reject a candidate if its
-slot structure cannot express the joke naturally. The Python semantic rank is
-evidence, not an instruction to select the highest score.
+        """Choose only among Python-ranked candidates and explain the narrative fit."""
+        prompt = f"""
+Evaluate existing meme templates for this product meme concept.
+Choose exactly one candidate ID only if it is genuinely suitable. Never invent an ID.
+If none is suitable, return selected_template_id as an empty string.
+Judge narrative structure and slot meanings, not keyword overlap alone.
+Return JSON only: selected_template_id, reason (one concise sentence).
 
 CONCEPT:
-{json.dumps(concept.model_dump(mode="json"), ensure_ascii=False)}
+{json.dumps(concept.model_dump(), ensure_ascii=False)}
 
-SHORTLIST:
+CANDIDATES:
 {json.dumps(candidates, ensure_ascii=False)}
-
-Return JSON only:
-{{"template_id":"one exact shortlisted id","reason":"one concise sentence explaining narrative fit"}}
 """
         data = await self._generate_json(prompt)
-        selected_id = str(data.get("template_id", "")).strip()
+        selected = str(data.get("selected_template_id", "")).strip()
         allowed = {str(item["template_id"]) for item in candidates}
-        if selected_id not in allowed:
-            raise LlamaServiceError("Gemini selected a template outside the approved shortlist.")
-        return {"template_id": selected_id, "reason": str(data.get("reason", "")).strip()}
+        if selected and selected not in allowed:
+            raise GeminiError("Gemini selected a template outside the supplied shortlist.")
+        return {"template_id": selected, "reason": str(data.get("reason", "")).strip()}
 
-    async def generate_template_candidates(
+    async def generate_joke_candidates(
         self,
         template_id: str,
         template_name: str,
@@ -116,97 +168,85 @@ Return JSON only:
         narrative_pattern: str = "",
         slot_meanings: Optional[Dict[str, str]] = None,
         slot_limits: Optional[Dict[str, int]] = None,
-        candidate_count: int = 3,
+        count: int = 3,
     ) -> List[Dict[str, Any]]:
-        """Generate several distinct, complete jokes for one exact template."""
+        """Generate distinct complete jokes and enforce slot limits without truncation."""
         limits = slot_limits or {}
-        limit_instructions = "\\n".join(
-            f"- {key}: maximum {limits[key]} characters"
-            for key in slot_keys if key in limits
-        ) or "- Keep each slot concise (2-8 words)."
-        prompt = f"""{self.prompt_builder.LIGHT_MODE_SYSTEM_PROMPT}
+        prompt = f"""
+Write {count} genuinely different marketing meme jokes for the selected existing template.
+Each candidate is one complete joke: all its slots must work together as a single unit.
+Make jokes product-specific, conversational, concise and naturally funny. Prefer a strong
+setup/punchline contrast. Do not merely describe product features. Do not invent product claims.
+No ellipses, filler, hashtags or quotation marks.
+Return JSON only in this shape:
+{{"candidates":[{{"id":"A","caption":"short summary","template_slots":{{"slot_key":"text"}}}}]}}
 
-Create exactly {candidate_count} DISTINCT complete joke candidates for this existing template.
 Template: {template_name} ({template_id})
 Purpose: {template_purpose}
 Narrative pattern: {narrative_pattern}
 Slot meanings: {json.dumps(slot_meanings or {}, ensure_ascii=False)}
-Required slot keys: {json.dumps(slot_keys)}
-Slot limits:
-{limit_instructions}
-
-Product and campaign requirements:
+Required exact slot keys: {json.dumps(slot_keys)}
+Maximum characters per slot: {json.dumps(limits)}
+User brief:
 {company_description}
 
-Quality rules:
-- Make each candidate a complete coherent joke; never mix slots between candidates.
-- Use a strong setup/punchline or contrast appropriate to the template.
-- Be specific to the product's real features and audience; do not invent claims.
-- Prefer natural conversational humour over advertising copy.
-- Candidates must use meaningfully different joke angles.
-- Avoid filler, ellipses, hashtags, and generic product descriptions.
-- Every slot must be non-empty and within its character limit.
-Return JSON only in this shape:
-{{"candidates":[{{"caption":"short summary","template_slots":{{{", ".join(json.dumps(k)+": "+json.dumps("text") for k in slot_keys)}}}}}]}}
+Return exactly {count} candidates. Every candidate must contain every required slot key.
 """
-        data = await self._generate_json(prompt)
-        raw_candidates = data.get("candidates")
-        if not isinstance(raw_candidates, list) or len(raw_candidates) < candidate_count:
-            raise LlamaServiceError("Gemini did not return the requested number of joke candidates.")
-
-        valid: List[Dict[str, Any]] = []
-        for candidate in raw_candidates[:candidate_count]:
-            raw_slots = candidate.get("template_slots", {}) if isinstance(candidate, dict) else {}
-            slots = {key: str(raw_slots.get(key, "")).strip() for key in slot_keys}
-            if set(raw_slots) != set(slot_keys):
-                continue
-            if any(not value or value.endswith("...") for value in slots.values()):
-                continue
-            if any(key in limits and len(value) > limits[key] for key, value in slots.items()):
-                continue
-            valid.append({
-                "caption": str(candidate.get("caption", "")).strip(),
-                "template_slots": slots,
-            })
-        if len(valid) < candidate_count:
-            raise LlamaServiceError(
-                f"Gemini returned only {len(valid)} valid candidates; {candidate_count} are required."
-            )
-        return valid
+        for attempt in range(2):
+            data = await self._generate_json(prompt)
+            raw_candidates = data.get("candidates", [])
+            valid: List[Dict[str, Any]] = []
+            problems: List[str] = []
+            if isinstance(raw_candidates, list):
+                for index, candidate in enumerate(raw_candidates):
+                    slots = candidate.get("template_slots", {}) if isinstance(candidate, dict) else {}
+                    slots = {key: str(slots.get(key, "")).strip() for key in slot_keys}
+                    invalid = [
+                        key for key, value in slots.items()
+                        if not value or (key in limits and len(value) > limits[key])
+                        or value.endswith("...")
+                    ]
+                    if invalid:
+                        problems.append(f"candidate {index + 1}: invalid slots {', '.join(invalid)}")
+                        continue
+                    valid.append({
+                        "id": str(candidate.get("id", chr(65 + index))),
+                        "caption": str(candidate.get("caption", "")).strip(),
+                        "template_slots": slots,
+                    })
+            if len(valid) >= 2:
+                return valid[:count]
+            if attempt == 0:
+                prompt += (
+                    "\nREPAIR: Return at least two complete, distinct candidates. "
+                    "All slot values must fit the exact limits. Invalid candidates: "
+                    + "; ".join(problems)
+                )
+        raise GeminiError("Gemini could not produce at least two valid joke candidates.")
 
     async def evaluate_joke_candidates(
-        self,
-        company_description: str,
-        template_name: str,
-        template_purpose: str,
-        candidates: List[Dict[str, Any]],
+        self, concept: LlamaOutput, candidates: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Select one whole candidate using explicit quality dimensions."""
-        prompt = f"""Evaluate these complete meme jokes for a product marketing campaign.
-Choose exactly one candidate. Score each candidate from 1-10 on:
-product relevance, naturalness, humour, clarity, and template fit.
-Do not reward keyword stuffing or generic advertising language.
-Do not rewrite or combine candidates. Select one candidate index (zero-based).
-
-Product brief: {company_description}
-Template: {template_name}
-Template purpose: {template_purpose}
+        """Select one complete candidate using explicit quality dimensions."""
+        prompt = f"""
+Select the strongest complete meme joke candidate. Do not combine candidates.
+Score each on product relevance, naturalness, humour/punchline strength, clarity and
+fit with the audience. Prefer a specific, surprising punchline over generic feature copy.
+Return JSON only: selected_candidate_id, reason, scores (object mapping candidate IDs
+to an integer 1-10 overall score).
+Concept: {json.dumps(concept.model_dump(), ensure_ascii=False)}
 Candidates: {json.dumps(candidates, ensure_ascii=False)}
-
-Return JSON only:
-{{"selected_index":0,"reason":"short explanation","scores":[{{"index":0,"product_relevance":8,"naturalness":8,"humour":7,"clarity":9,"template_fit":9}}]}}
 """
         data = await self._generate_json(prompt)
-        try:
-            index = int(data["selected_index"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise LlamaServiceError("Gemini returned an invalid joke candidate selection.") from exc
-        if index < 0 or index >= len(candidates):
-            raise LlamaServiceError("Gemini selected a joke candidate outside the supplied list.")
+        selected = str(data.get("selected_candidate_id", "")).strip()
+        allowed = {str(item["id"]) for item in candidates}
+        if selected not in allowed:
+            raise GeminiError("Gemini selected an unknown joke candidate.")
+        chosen = next(item for item in candidates if str(item["id"]) == selected)
         return {
-            "selected_index": index,
-            "reason": str(data.get("reason", "")).strip(),
-            "scores": data.get("scores", []),
+            **chosen,
+            "selection_reason": str(data.get("reason", "")).strip(),
+            "scores": data.get("scores", {}),
         }
 
     async def generate_template_slots(
@@ -219,18 +259,12 @@ Return JSON only:
         narrative_pattern: str = "",
         slot_meanings: Optional[Dict[str, str]] = None,
         slot_limits: Optional[Dict[str, int]] = None,
-    ) -> Tuple[Dict[str, str], str]:
-        """Compatibility wrapper returning one selected candidate."""
-        candidates = await self.generate_template_candidates(
-            template_id=template_id,
-            template_name=template_name,
-            slot_keys=slot_keys,
-            company_description=company_description,
-            template_purpose=template_purpose,
-            narrative_pattern=narrative_pattern,
-            slot_meanings=slot_meanings,
-            slot_limits=slot_limits,
-            candidate_count=1,
+    ):
+        """Compatibility wrapper for callers that still request a single caption set."""
+        candidates = await self.generate_joke_candidates(
+            template_id, template_name, slot_keys, company_description,
+            template_purpose, narrative_pattern, slot_meanings, slot_limits, count=3,
         )
-        candidate = candidates[0]
-        return candidate["template_slots"], candidate["caption"]
+        concept = await self.generate_meme_concept(company_description)
+        selected = await self.evaluate_joke_candidates(concept, candidates)
+        return selected["template_slots"], selected.get("caption", "")
