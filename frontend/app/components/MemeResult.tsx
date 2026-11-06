@@ -105,6 +105,12 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                     </div>
                 </div>
 
+                <div style={{ margin: "12px 0", color: "#a1a1aa", fontSize: "13px" }}>
+                    {result.aiProvider && <span>AI provider: <strong style={{ color: "#fff", textTransform: "capitalize" }}>{result.aiProvider}</strong></span>}
+                    {result.templateName && <span> · Template: <strong style={{ color: "#fff" }}>{result.templateName}</strong></span>}
+                    {result.templateReason && <p style={{ marginTop: "6px" }}>{result.templateReason}</p>}
+                </div>
+
                 {/* Caption */}
                 <div className={styles.captionContainer}>
                     <div className={styles.captionHeader}>
