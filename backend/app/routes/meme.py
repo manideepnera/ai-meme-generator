@@ -22,6 +22,7 @@ from app.services.templates import (
     get_template_service,
 )
 from app.services.fallback import FallbackMemeService
+from app.services.gemini import GeminiService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -94,39 +95,55 @@ async def generate_meme(
     )
     
     # ==========================================================================
-    # STEP 1: Generate a concept with LLaMA, falling back locally on failure
+    # STEP 1: Generate a concept with LLaMA, then Gemini if LLaMA fails
     # ==========================================================================
     fallback_service = FallbackMemeService()
+    gemini_service = GeminiService()
+    active_provider = "local"
+
     if request.use_llama:
         try:
-            logger.info("LLaMA mode is ON. Calling configured LLaMA API...")
+            logger.info("LLaMA mode is ON. Trying the configured LLaMA API first.")
             llama_output = await llama_service.generate_meme_concept(
                 request.company_description
             )
-            logger.info("LLaMA concept generation succeeded.")
-        except Exception as e:
-            logger.error("LLaMA mode is ON but the API call failed: %s", e, exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    "error": "llama_unavailable",
-                    "message": "LLaMA is enabled but could not generate a concept. Check the endpoint, credentials, and model service. Turn LLaMA off to use the local fallback.",
-                },
-            ) from e
+            active_provider = "llama"
+        except Exception as llama_error:
+            logger.warning("LLaMA failed; trying Google Gemini fallback: %s", llama_error)
+            try:
+                llama_output = await gemini_service.generate_meme_concept(
+                    request.company_description
+                )
+                active_provider = "gemini"
+                logger.info("Gemini successfully generated the concept.")
+            except Exception as gemini_error:
+                logger.error("Both LLaMA and Gemini failed. LLaMA: %s | Gemini: %s", llama_error, gemini_error, exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail={
+                        "error": "ai_providers_unavailable",
+                        "message": "LLaMA failed and Gemini could not take over. Set GOOGLE_API_KEY in the backend environment to enable the Gemini fallback. Check both provider configurations.",
+                    },
+                ) from gemini_error
     else:
-        logger.info("LLaMA mode is OFF. Using the local concept fallback.")
+        logger.info("AI mode is OFF. Using the local deterministic concept fallback.")
         llama_output = fallback_service.create_concept(request.company_description)
 
-    # STEP 2: Select and render an existing meme template
+    # STEP 2: Select a suitable existing template and generate its exact slot text.
     # ==========================================================================
     try:
-        logger.info("Step 2: Attempting template-based generation...")
         template = template_service.match_template(llama_output)
         if template:
-            logger.info(f"Matched template: {template.id}. Generating template-aware captions...")
             profile = template_service.get_template_profile(template.id)
-            try:
-                slot_values, generated_caption = await llama_service.generate_template_slots(
+            required_keys = {slot.key for slot in template.text_slots}
+
+            if active_provider == "local":
+                slot_values = template_service.fill_template_slots(template, llama_output)
+                caption = llama_output.caption
+            else:
+                slot_generator = llama_service if active_provider == "llama" else gemini_service
+                backup_generator = gemini_service if active_provider == "llama" else llama_service
+                slot_args = dict(
                     template_id=template.id,
                     template_name=template.name,
                     slot_keys=[slot.key for slot in template.text_slots],
@@ -135,47 +152,58 @@ async def generate_meme(
                     narrative_pattern=profile.get("narrative_pattern", ""),
                     slot_meanings=profile.get("slot_meanings", {}),
                 )
-                required_keys = {slot.key for slot in template.text_slots}
-                if set(slot_values) != required_keys or any(not value.strip() for value in slot_values.values()):
-                    raise ValueError("LLaMA returned incomplete template captions")
+                try:
+                    slot_values, generated_caption = await slot_generator.generate_template_slots(**slot_args)
+                except Exception as primary_slot_error:
+                    logger.warning("%s slot generation failed; trying alternate provider: %s", active_provider, primary_slot_error)
+                    try:
+                        slot_values, generated_caption = await backup_generator.generate_template_slots(**slot_args)
+                    except Exception as backup_slot_error:
+                        raise HTTPException(
+                            status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail={
+                                "error": "caption_providers_unavailable",
+                                "message": "The concept was generated, but both AI providers failed to write the template captions. Check LLaMA and GOOGLE_API_KEY.",
+                            },
+                        ) from backup_slot_error
+
+                if set(slot_values) != required_keys or any(not str(value).strip() for value in slot_values.values()):
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail={
+                            "error": "invalid_template_captions",
+                            "message": "The AI providers returned incomplete captions for the selected template. Please try again.",
+                        },
+                    )
                 caption = template_service.sanitize_text(generated_caption, max_chars=150)
                 slot_values = {
                     slot.key: template_service.sanitize_text(slot_values[slot.key], slot.max_chars)
                     for slot in template.text_slots
                 }
-            except Exception as caption_error:
-                logger.warning("Template-aware caption generation failed; using local slot fallback: %s", caption_error)
-                slot_values = template_service.fill_template_slots(template, llama_output)
-                caption = llama_output.caption
 
-            logger.info(f"Rendering template {template.id}...")
             rendered_image = template_service.render_template(template, slot_values)
-            
             image_base64 = template_service.image_to_base64(rendered_image)
             selected_match = next(
                 (item for item in template_service.rank_templates(llama_output)
                  if item["template_id"] == template.id),
                 {},
             )
-
-            logger.info("Template-based generation successful!")
             return MemeGenerateResponse(
                 image_url=None,
                 image_base64=image_base64,
                 caption=caption,
                 text_position=llama_output.text_position,
-                image_prompt="Existing template renderer; no AI image generation used.",
+                image_prompt=f"Existing template renderer; AI provider: {active_provider}. No AI image generation used.",
                 template_id=template.id,
                 template_name=template.name,
                 template_score=selected_match.get("score"),
                 template_reason="; ".join(selected_match.get("reasons", [])),
             )
-        else:
-            logger.info("No suitable existing template matched.")
-            
+        logger.info("No suitable existing template matched the generated concept.")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Template generation failed: {e}", exc_info=True)
-        logger.info("Template rendering failed; returning a structured error instead of generating a new image.")
+        logger.error("Template generation failed: %s", e, exc_info=True)
 
     # ==========================================================================
     # STEP 3: Do not generate a new image when no template is suitable
