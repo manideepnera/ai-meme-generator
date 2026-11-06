@@ -196,7 +196,7 @@ async def readiness_check(
     catalog_loaded = bool(template_service.intelligence)
     gemini_configured = bool(settings.GOOGLE_API_KEY)
     return {
-        "status": "ready" if templates_loaded and catalog_loaded else "not_ready",
+        "status": "ready" if templates_loaded and catalog_loaded and gemini_configured else "not_ready",
         "configuration": {
             "gemini_api_configured": gemini_configured,
             "gemini_model": settings.GEMINI_MODEL,
