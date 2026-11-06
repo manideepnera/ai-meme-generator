@@ -106,7 +106,7 @@ Your response MUST be a JSON object with these keys:
 
 Guidelines:
 1. Write like an internet meme: Use natural, human-friendly, and relatable language.
-2. Be concise: Max 4 words per slot.
+2. Be concise: ideally 2-8 words per slot; use fewer words when the template needs it.
 3. Be funny: Create a humorous contrast or connection based on the product description.
 4. Clean text: No underscores, no template IDs, no labels, no snake_case, and no technical identifiers.
 5. Originality: Do not simply repeat the user's product description.
