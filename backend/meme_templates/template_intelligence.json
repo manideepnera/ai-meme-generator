@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "templates": {
+    "drake_hotline": {
+      "purpose": "Shows a clear rejection of one option followed by approval of a better or more appealing alternative.",
+      "narrative_pattern": "No to X; yes to Y.",
+      "best_for": ["preference", "approval", "rejection", "comparison", "choosing a favorite", "before versus better"],
+      "intent_aliases": ["preference", "approval", "rejection", "favoritism", "choice", "comparison", "satisfaction"],
+      "semantic_cues": ["prefer", "rather have", "choose", "better than", "not interested", "approved", "reject", "upgrade"],
+      "avoid_when": ["two equally difficult choices", "three-way temptation", "progression through multiple levels", "awkward aftermath"],
+      "slot_meanings": {"nope": "The option, behavior, or situation being rejected", "yep": "The preferred, approved, or more appealing alternative"},
+      "example": {"nope": "Room-temperature soda", "yep": "Ice-cold Coca-Cola"}
+    },
+    "two_buttons": {
+      "purpose": "Depicts a person struggling to choose between two competing options, duties, desires, or conflicting priorities.",
+      "narrative_pattern": "I must choose between X and Y, but both create pressure.",
+      "best_for": ["dilemma", "conflict", "pressure", "indecision", "competing priorities", "trade-off"],
+      "intent_aliases": ["dilemma", "conflict", "indecision", "pressure", "tension", "tradeoff", "competing priorities"],
+      "semantic_cues": ["can't decide", "both options", "torn between", "either or", "two choices", "struggling to choose", "conflicting"],
+      "avoid_when": ["simple preference with an obvious winner", "a single bold opinion", "a sequence of increasing levels", "temptation with a third observer"],
+      "slot_meanings": {"choice_1": "The first competing choice or pressure", "choice_2": "The second competing choice or pressure"},
+      "example": {"choice_1": "Save money", "choice_2": "Buy another Coca-Cola"}
+    },
+    "distracted_boyfriend": {
+      "purpose": "Shows someone abandoning or neglecting an existing commitment because a tempting new alternative attracts their attention.",
+      "narrative_pattern": "Subject is distracted from old option by tempting new option.",
+      "best_for": ["temptation", "switching_preference", "distraction", "new versus old", "abandoning a routine"],
+      "intent_aliases": ["temptation", "distraction", "switching_preference", "attention_shift", "desire", "craving"],
+      "semantic_cues": ["tempted by", "can't resist", "distracted by", "instead of", "switch to", "abandon", "new alternative", "craving"],
+      "avoid_when": ["only two equally difficult options", "simple yes versus no", "a single opinion", "an awkward reaction after an event"],
+      "slot_meanings": {"subject": "The person or group making the switch", "old_option": "The original commitment or sensible choice", "new_option": "The tempting alternative attracting attention"},
+      "example": {"subject": "Me", "old_option": "Plain water", "new_option": "Ice-cold Coca-Cola"}
+    },
+    "expanding_brain": {
+      "purpose": "Builds a sequence of increasingly elaborate, absurd, advanced, or supposedly enlightened ways to approach the same subject.",
+      "narrative_pattern": "Level 1 through level 4, with each step escalating the idea.",
+      "best_for": ["escalation", "progression", "levels", "evolution", "increasing absurdity", "upgrade"],
+      "intent_aliases": ["escalation", "progression", "evolution", "growth", "upgrade", "absurdity", "levels"],
+      "semantic_cues": ["level up", "next level", "increasingly", "advanced", "evolved", "ultimate", "step by step", "progressively"],
+      "avoid_when": ["two-way dilemma", "simple rejection and approval", "single confession", "argument between two sides"],
+      "slot_meanings": {"level_1": "The basic or least sophisticated approach", "level_2": "A slightly more elaborate approach", "level_3": "A more exaggerated or advanced approach", "level_4": "The most extreme, absurd, or 'enlightened' approach"},
+      "example": {"level_1": "A regular drink", "level_2": "A cold drink", "level_3": "A chilled Coca-Cola", "level_4": "Coca-Cola with perfectly timed ice"}
+    },
+    "change_my_mind": {
+      "purpose": "Presents one bold, debatable, provocative, or exaggerated opinion as a statement that challenges others to disagree.",
+      "narrative_pattern": "A confident claim: prove me wrong.",
+      "best_for": ["opinion", "debate", "provocation", "hot take", "strong claim"],
+      "intent_aliases": ["opinion", "debate", "provocation", "hot_take", "argument", "controversy"],
+      "semantic_cues": ["change my mind", "prove me wrong", "unpopular opinion", "hot take", "best ever", "no debate"],
+      "avoid_when": ["a choice between two options", "a before-and-after story", "a multi-step progression", "a confession"],
+      "slot_meanings": {"statement": "One short, confident, debatable claim"},
+      "example": {"statement": "Ice-cold Coca-Cola makes summer better"}
+    },
+    "monkey_puppet": {
+      "purpose": "Captures an awkward, guilty, nervous, or uncomfortable reaction after someone realizes something or gets caught.",
+      "narrative_pattern": "What happened or was said; the awkward realization or reaction that follows.",
+      "best_for": ["awkwardness", "regret", "realization", "guilt", "caught", "uncomfortable reaction"],
+      "intent_aliases": ["awkwardness", "regret", "realization", "guilt", "embarrassment", "caught"],
+      "semantic_cues": ["awkward", "realized", "got caught", "oops", "regret", "pretending", "when they notice", "uncomfortable"],
+      "avoid_when": ["clear preference comparison", "two equally difficult choices", "bold public opinion", "progression through levels"],
+      "slot_meanings": {"before": "The statement, action, or situation that leads into the moment", "after": "The awkward realization or reaction"},
+      "example": {"before": "Said I only wanted one Coke", "after": "Already finished the whole bottle"}
+    },
+    "hands_up_opinion": {
+      "purpose": "A person openly admits, confesses, or owns a relatable truth, habit, preference, or unpopular behavior.",
+      "narrative_pattern": "An honest first-person admission.",
+      "best_for": ["confession", "admission", "honesty", "relatable habit", "personal truth"],
+      "intent_aliases": ["confession", "admission", "honesty", "self_awareness", "personal_truth"],
+      "semantic_cues": ["honestly", "I admit", "confession", "let's be real", "guilty", "not going to lie", "truth is"],
+      "avoid_when": ["a debate aimed at others", "two competing options", "a sequence of levels", "a clear rejection versus approval"],
+      "slot_meanings": {"statement": "A concise first-person confession or honest admission"},
+      "example": {"statement": "I buy Coca-Cola for the food and finish it first"}
+    },
+    "woman_yelling_cat": {
+      "purpose": "Contrasts an angry, panicked, or accusatory person with a calm, confused, or seemingly unbothered response.",
+      "narrative_pattern": "One side makes an emotional accusation; the other side responds with confusion or calm indifference.",
+      "best_for": ["argument", "blame", "misunderstanding", "panic", "accusation", "overreaction"],
+      "intent_aliases": ["argument", "blame", "panic", "misunderstanding", "overreaction", "accusation", "frustration"],
+      "semantic_cues": ["yelling", "blaming", "panicking", "why did you", "angry about", "accusing", "overreacting"],
+      "avoid_when": ["simple preference", "two equal choices", "single confession", "multi-level progression"],
+      "slot_meanings": {"yelling": "The emotional accusation, complaint, or demand", "cat": "The calm, confused, or unbothered response"}
+    }
+  }
+}
