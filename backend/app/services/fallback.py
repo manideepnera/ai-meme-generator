@@ -6,7 +6,6 @@ import base64
 import hashlib
 import re
 from io import BytesIO
-from pathlib import Path
 from typing import Sequence
 
 from PIL import Image, ImageDraw, ImageFont
@@ -136,7 +135,7 @@ class FallbackMemeService:
 
     @staticmethod
     def _clean_text(value: str) -> str:
-        return re.sub(r"\\s+", " ", str(value or "")).strip()
+        return re.sub(r"\s+", " ", str(value or "")).strip()
 
     @classmethod
     def _extract_topic(cls, description: str) -> str:
@@ -148,7 +147,7 @@ class FallbackMemeService:
             flags=re.IGNORECASE,
         )
         text = re.sub(r"^(?:a|an|the)\\s+", "", text, flags=re.IGNORECASE)
-        text = re.split(r"[.!?\\n]", text, maxsplit=1)[0].strip(" ,;:-")
+        text = re.split(r"[.!?\n]", text, maxsplit=1)[0].strip(" ,;:-")
         words = text.split()
         topic = " ".join(words[:10]).strip()
         if len(topic) > 68:
@@ -201,7 +200,7 @@ class FallbackMemeService:
                 current = candidate
         if current:
             lines.append(current)
-        return "\\n".join(lines)
+        return "\n".join(lines)
 
     @classmethod
     def _fit_text(
