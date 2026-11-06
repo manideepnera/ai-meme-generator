@@ -398,6 +398,22 @@ class TemplateService:
             font, wrapped, fitted_size = fitted
             x, y = slot.coordinates
             anchor = "mm" if style.align == "center" else "la"
+            rendered_bounds = draw.multiline_textbbox(
+                (x, y),
+                wrapped,
+                font=font,
+                anchor=anchor,
+                align=style.align,
+                spacing=max(2, fitted_size // 5),
+                stroke_width=style.stroke_width if style.stroke else 0,
+            )
+            if (
+                rendered_bounds[0] < 0 or rendered_bounds[1] < 0
+                or rendered_bounds[2] > img.width or rendered_bounds[3] > img.height
+            ):
+                raise ValueError(
+                    f"Caption slot '{slot.key}' would extend beyond the image boundary."
+                )
             draw.multiline_text(
                 (x, y),
                 wrapped,
