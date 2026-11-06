@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.meme import LlamaOutput
 from app.config import get_settings
+from app.services.template_intelligence import TemplateIntelligence
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,8 @@ class TemplateService:
         self.keywords: Dict[str, Dict[str, List[str]]] = {}
         self._load_templates()
         self._load_keywords()
+        catalog_path = os.path.join(self.templates_dir, "template_intelligence.json")
+        self.intelligence = TemplateIntelligence(catalog_path) if os.path.exists(catalog_path) else None
 
     def _load_keywords(self):
         """Load template keywords from template_keywords.json."""
@@ -102,48 +105,38 @@ class TemplateService:
         except Exception as e:
             logger.error(f"Failed to load template index: {e}")
 
+    def rank_templates(self, concept: LlamaOutput) -> List[Dict[str, Any]]:
+        """Return semantic template candidates with scores and human-readable reasons."""
+        if not self.intelligence:
+            return []
+        return self.intelligence.rank(concept)
+
     def match_template(self, concept: LlamaOutput) -> Optional[MemeTemplate]:
         """
-        Match a meme concept to a template based on heuristics.
-        Returns the best matching template or None if no match is good enough.
+        Select a template by the meaning and narrative structure of the meme concept.
+
+        Intent and use-case evidence are prioritised. Keywords are supporting
+        evidence, not a standalone template-selection mechanism.
         """
-        best_match = None
-        highest_score = 0.0
+        if not self.intelligence:
+            logger.warning("Template intelligence catalog is unavailable.")
+            return None
 
-        concept_use_cases = set(concept.use_cases or [])
-        concept_keywords = set(k.lower() for k in (concept.keywords or []))
-        concept_intent = concept.intent.lower() if concept.intent else ""
+        selected = self.intelligence.select(concept)
+        if not selected:
+            ranked = self.intelligence.rank(concept)
+            logger.info("No confident template match. Top candidates: %s", ranked[:2])
+            return None
 
-        for template in self.templates.values():
-            score = 0.0
-            
-            # 1. Match use cases (highest weight)
-            template_use_cases = set(template.use_cases)
-            matches = template_use_cases.intersection(concept_use_cases)
-            if matches:
-                score += 0.5 * (len(matches) / len(template_use_cases))
-            
-            # 2. Match intent (medium weight)
-            if concept_intent and concept_intent in template.use_cases:
-                score += 0.3
-            
-            # 3. Match keywords in description or name (lower weight)
-            template_text = (template.name + " " + template.description).lower()
-            keyword_matches = [k for k in concept_keywords if k in template_text]
-            if keyword_matches:
-                score += 0.2 * (len(keyword_matches) / max(len(concept_keywords), 1))
-
-            # 4. Check for specific template mentioned in caption (bonus)
-            if template.id.replace("_", " ") in concept.caption.lower() or template.name.lower() in concept.caption.lower():
-                score += 0.4
-
-            logger.debug(f"Template {template.id} score: {score} (threshold: {template.confidence_threshold})")
-            
-            if score >= template.confidence_threshold and score > highest_score:
-                highest_score = score
-                best_match = template
-
-        return best_match
+        template = self.templates.get(selected["template_id"])
+        if template:
+            logger.info(
+                "Selected template %s (score %.3f): %s",
+                template.id,
+                selected["score"],
+                "; ".join(selected["reasons"]),
+            )
+        return template
 
     def match_templates_by_keywords(self, description: str, threshold: int = 3) -> Optional[MemeTemplate]:
         """
