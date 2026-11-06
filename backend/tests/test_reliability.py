@@ -116,71 +116,71 @@ async def test_api_does_not_generate_an_image_when_no_template_matches():
 
 
 @pytest.mark.asyncio
-async def test_gemini_rewrites_overlong_template_captions_instead_of_truncating(monkeypatch):
+async def test_gemini_returns_three_valid_complete_joke_candidates(monkeypatch):
     from app.services.gemini import GeminiService
 
     service = GeminiService()
     responses = [
-        {
-            "template_slots": {
-                "left": "Me, laser-focused on work",
-                "right": "HydroTrack showing zero ounces after a very long day",
-            },
-            "caption": "Hydration reminder",
-        },
-        {
-            "template_slots": {
-                "left": "Me, locked in on work",
-                "right": "HydroTrack: 0 oz. All day.",
-            },
-            "caption": "Hydration reminder",
-        },
+        {"candidates": [
+            {"id": "A", "caption": "Good", "template_slots": {"left": "Me at work", "right": "HydroTrack: 0 oz."}},
+            {"id": "B", "caption": "Too long", "template_slots": {"left": "Me at work", "right": "HydroTrack showing zero ounces after work"}},
+            {"id": "C", "caption": "Good", "template_slots": {"left": "One more task", "right": "Drink some water"}},
+        ]},
+        {"candidates": [
+            {"id": "A", "caption": "Work mode", "template_slots": {"left": "Me at work", "right": "HydroTrack: 0 oz."}},
+            {"id": "B", "caption": "Reminder", "template_slots": {"left": "One more task", "right": "Drink some water"}},
+            {"id": "C", "caption": "Hydration", "template_slots": {"left": "Deep in code", "right": "Water break now"}},
+        ]},
     ]
-    calls = []
+    prompts = []
 
     async def fake_generate_json(prompt):
-        calls.append(prompt)
+        prompts.append(prompt)
         return responses.pop(0)
 
     monkeypatch.setattr(service, "_generate_json", fake_generate_json)
-
-    slots, caption = await service.generate_template_slots(
+    candidates = await service.generate_joke_candidates(
         template_id="monkey_puppet",
         template_name="Monkey Puppet",
         slot_keys=["left", "right"],
         company_description="HydroTrack smart hydration bottle",
-        slot_limits={"left": 24, "right": 26},
+        slot_limits={"left": 24, "right": 24},
+        count=3,
     )
 
-    assert slots == {
-        "left": "Me, locked in on work",
-        "right": "HydroTrack: 0 oz. All day.",
-    }
-    assert caption == "Hydration reminder"
-    assert len(calls) == 2
-    assert "REPAIR REQUIRED" in calls[1]
+    assert len(candidates) == 3
+    assert len({candidate["id"] for candidate in candidates}) == 3
+    assert all(set(candidate["template_slots"]) == {"left", "right"} for candidate in candidates)
+    assert "REPAIR" in prompts[1]
 
 
 @pytest.mark.asyncio
-async def test_gemini_rejects_captions_that_remain_over_slot_limit(monkeypatch):
-    from app.services.gemini import GeminiService
-    from app.services.llama import LlamaServiceError
+async def test_gemini_fails_if_three_valid_jokes_cannot_be_generated(monkeypatch):
+    from app.services.gemini import GeminiError, GeminiService
 
     service = GeminiService()
 
     async def fake_generate_json(_prompt):
-        return {
-            "template_slots": {"top": "This caption is much too long"},
-            "caption": "Too long",
-        }
+        return {"candidates": [
+            {"id": "A", "caption": "Too long", "template_slots": {"top": "This caption is much too long"}}
+        ]}
 
     monkeypatch.setattr(service, "_generate_json", fake_generate_json)
-
-    with pytest.raises(LlamaServiceError, match="exceed slot limits"):
-        await service.generate_template_slots(
+    with pytest.raises(GeminiError, match="requested number"):
+        await service.generate_joke_candidates(
             template_id="change_my_mind",
             template_name="Change My Mind",
             slot_keys=["top"],
             company_description="A test product",
             slot_limits={"top": 12},
+            count=3,
         )
+
+
+def test_renderer_rejects_over_limit_caption_without_truncating():
+    service = TemplateService()
+    template = next(iter(service.templates.values()))
+    slot = template.text_slots[0]
+
+    with pytest.raises(ValueError, match="exceeds"):
+        service.render_template(template, {slot.key: "X" * (slot.max_chars + 1)})
