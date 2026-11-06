@@ -65,7 +65,7 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                     <div className={styles.llamaControlText}>
                         <span className={styles.llamaTitle}>Use LLaMA AI</span>
                         <span className={styles.llamaDescription}>
-                            {useLlama ? 'Real model required. Errors will be shown; no silent fallback.' : 'LLaMA disabled. Use the local concept fallback.'}
+                            {useLlama ? 'LLaMA first, Gemini backup if LLaMA fails.' : 'Both AI providers disabled. Use the local concept fallback.'}
                         </span>
                     </div>
                     <label className={styles.switch}>
