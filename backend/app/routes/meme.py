@@ -39,6 +39,7 @@ from app.services.templates import (
     TemplateService,
     get_template_service,
 )
+from app.services.fallback import FallbackMemeService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -163,8 +164,9 @@ async def generate_meme(
         # Continue to existing flow
     
     # ==========================================================================
-    # STEP 1: Call LLaMA to generate meme concept (Existing Flow)
+    # STEP 1: Generate a concept with LLaMA, falling back locally on failure
     # ==========================================================================
+    fallback_service = FallbackMemeService()
     try:
         logger.info("Step 1: Calling LLaMA API for meme concept generation...")
         llama_output = await llama_service.generate_meme_concept(
@@ -174,61 +176,14 @@ async def generate_meme(
             f"LLaMA generated concept: caption='{llama_output.caption[:50]}...', "
             f"position={llama_output.text_position}"
         )
-        
-    except LlamaConnectionError as e:
-        logger.error(f"LLaMA connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "error": "llama_connection_error",
-                "message": str(e),
-                "details": {
-                    "service": "LLaMA API",
-                    "action": "Check LLAMA_API_URL configuration and network connectivity"
-                }
-            }
+    except Exception as e:
+        logger.warning(
+            "LLaMA concept generation failed; using a local fallback concept: %s",
+            e,
+            exc_info=True,
         )
-        
-    except LlamaResponseError as e:
-        logger.error(f"LLaMA response error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "llama_response_error",
-                "message": str(e),
-                "details": {
-                    "service": "LLaMA API",
-                    "action": "LLaMA returned an invalid response format"
-                }
-            }
-        )
-        
-    except LlamaValidationError as e:
-        logger.error(f"LLaMA validation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "llama_validation_error",
-                "message": str(e),
-                "details": {
-                    "service": "LLaMA API",
-                    "action": "LLaMA output did not match expected schema"
-                }
-            }
-        )
-        
-    except LlamaServiceError as e:
-        logger.error(f"LLaMA service error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "llama_error",
-                "message": str(e),
-                "details": {"service": "LLaMA API"}
-            }
-        )
-    
-    # ==========================================================================
+        llama_output = fallback_service.create_concept(request.company_description)
+
     # STEP 2: Try template-based generation first
     # ==========================================================================
     try:
@@ -259,53 +214,42 @@ async def generate_meme(
         logger.info("Falling back to AI image generation due to template error.")
 
     # ==========================================================================
-    # STEP 3: Forward to Google Colab for image generation (Fallback)
+    # STEP 3: Try Colab image generation, then render a local fallback image
     # ==========================================================================
     try:
         logger.info("Step 3: Forwarding to Colab for meme image generation...")
         colab_response = await colab_service.generate_meme(llama_output)
         logger.info("Colab successfully generated meme image")
-        
-    except ColabConnectionError as e:
-        logger.error(f"Colab connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "error": "colab_connection_error",
-                "message": str(e),
-                "details": {
-                    "service": "Google Colab",
-                    "action": "Check COLAB_API_URL configuration and ensure Colab is running"
-                }
-            }
+
+    except Exception as e:
+        logger.warning(
+            "Colab image generation failed; rendering a local fallback meme: %s",
+            e,
+            exc_info=True,
         )
-        
-    except ColabResponseError as e:
-        logger.error(f"Colab response error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "colab_response_error",
-                "message": str(e),
-                "details": {
-                    "service": "Google Colab",
-                    "action": "Colab returned an error during image generation"
-                }
-            }
-        )
-        
-    except ColabServiceError as e:
-        logger.error(f"Colab service error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "error": "colab_error",
-                "message": str(e),
-                "details": {"service": "Google Colab"}
-            }
-        )
-    
-    # ==========================================================================
+        try:
+            fallback_image = fallback_service.render_image_base64(
+                request.company_description,
+                llama_output.caption,
+            )
+            return MemeGenerateResponse(
+                image_url=None,
+                image_base64=fallback_image,
+                caption=llama_output.caption,
+                text_position=llama_output.text_position,
+                image_prompt="Local fallback renderer (remote image service unavailable)",
+            )
+        except Exception as fallback_error:
+            logger.exception("Local fallback meme rendering also failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "meme_rendering_failed",
+                    "message": "Remote image generation and local fallback both failed.",
+                    "details": {"reason": str(fallback_error)},
+                },
+            ) from fallback_error
+
     # STEP 4: Build and return response to frontend
     # ==========================================================================
     response = MemeGenerateResponse(
