@@ -326,13 +326,25 @@ class TemplateService:
             lines.append(current)
         return "\n".join(lines)
 
-    def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
-        """Render captions with measured wrapping and adaptive font sizing.
+    @staticmethod
+    def _wrap_text_to_width(text: str, font: ImageFont.ImageFont, draw: ImageDraw.ImageDraw, max_width: int) -> str:
+        """Wrap text using measured pixel width rather than character count."""
+        words = text.split()
+        lines: List[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and draw.textlength(candidate, font=font) > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        return "\\n".join(lines)
 
-        Slot coordinates remain the template's anchor points. Since the template
-        format does not define per-slot rectangles, safe widths are estimated from
-        image width and slot count; text is never silently truncated.
-        """
+    def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
+        """Render validated captions, shrinking and wrapping text to fit the image."""
         image_path = os.path.join(template.base_path, template.image.file)
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Template image not found: {image_path}")
@@ -340,11 +352,14 @@ class TemplateService:
         img = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(img)
         style = template.text_style
-        slot_count = max(1, len(template.text_slots))
-        width_ratio = 0.86 if slot_count == 1 else (0.43 if slot_count == 2 else 0.29)
-        max_width = max(120, int(img.width * width_ratio))
-        max_height = max(70, int(img.height * 0.24))
-        font_path = "C:\\Windows\\Fonts\\impact.ttf" if os.name == "nt" else None
+        max_width = int(img.width * 0.88)
+        max_height = int(img.height * 0.24)
+        base_size = style.font_size
+        font_candidates = [
+            "C:/Windows/Fonts/impact.ttf",
+            "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ]
 
         for slot in template.text_slots:
             text = str(slot_values.get(slot.key, "")).strip()
@@ -355,42 +370,52 @@ class TemplateService:
                     f"Caption slot '{slot.key}' exceeds its {slot.max_chars}-character limit."
                 )
 
-            font_size = style.font_size
-            fitted = False
-            while font_size >= 12:
-                try:
-                    font = ImageFont.truetype(font_path, font_size) if font_path and os.path.exists(font_path) else ImageFont.load_default(size=font_size)
-                except (OSError, TypeError):
+            fitted = None
+            for size in range(base_size, 11, -1):
+                font = None
+                for font_path in font_candidates:
+                    if os.path.exists(font_path):
+                        try:
+                            font = ImageFont.truetype(font_path, size)
+                            break
+                        except OSError:
+                            continue
+                if font is None:
                     font = ImageFont.load_default()
-                wrapped = self._wrap_text(text, font, draw, max_width)
+
+                wrapped = self._wrap_text_to_width(text, font, draw, max_width)
+                if len(wrapped.splitlines()) > 3:
+                    continue
                 bbox = draw.multiline_textbbox(
-                    (0, 0), wrapped, font=font, align=style.align,
-                    spacing=max(2, font_size // 8),
+                    (0, 0), wrapped, font=font, align=style.align, spacing=max(2, size // 5),
                     stroke_width=style.stroke_width if style.stroke else 0,
                 )
                 text_width = bbox[2] - bbox[0]
                 text_height = bbox[3] - bbox[1]
                 if text_width <= max_width and text_height <= max_height:
-                    fitted = True
+                    fitted = (font, wrapped, size)
                     break
-                font_size -= 2
 
-            if not fitted:
+            if fitted is None:
                 raise ValueError(
-                    f"Caption slot '{slot.key}' cannot fit the template's safe text area."
+                    f"Caption slot '{slot.key}' cannot fit the template's visual text area."
                 )
 
+            font, wrapped, fitted_size = fitted
+            x, y = slot.coordinates
+            anchor = "mm" if style.align == "center" else "la"
             draw.multiline_text(
-                slot.coordinates,
+                (x, y),
                 wrapped,
                 font=font,
                 fill=style.color,
                 stroke_width=style.stroke_width if style.stroke else 0,
                 stroke_fill=style.stroke_color,
-                anchor="mm" if style.align == "center" else "la",
+                anchor=anchor,
                 align=style.align,
-                spacing=max(2, font_size // 8),
+                spacing=max(2, fitted_size // 5),
             )
+
         return img
 
     def image_to_base64(self, img: Image.Image) -> str:
