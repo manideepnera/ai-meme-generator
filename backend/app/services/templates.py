@@ -328,6 +328,15 @@ class TemplateService:
 
     def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
         """Render validated captions, shrinking and wrapping text to fit the image."""
+        for slot in template.text_slots:
+            value = str(slot_values.get(slot.key, "")).strip()
+            if not value:
+                raise ValueError(f"Caption slot '{slot.key}' is empty.")
+            if len(value) > slot.max_chars:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' exceeds its {slot.max_chars}-character limit."
+                )
+
         image_path = os.path.join(template.base_path, template.image.file)
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Template image not found: {image_path}")
