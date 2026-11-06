@@ -149,7 +149,7 @@ async def test_gemini_rewrites_overlong_template_captions_instead_of_truncating(
         template_name="Monkey Puppet",
         slot_keys=["left", "right"],
         company_description="HydroTrack smart hydration bottle",
-        slot_limits={"left": 24, "right": 25},
+        slot_limits={"left": 24, "right": 26},
     )
 
     assert slots == {
