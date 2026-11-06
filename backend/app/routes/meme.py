@@ -152,12 +152,23 @@ async def generate_meme(
                     narrative_pattern=profile.get("narrative_pattern", ""),
                     slot_meanings=profile.get("slot_meanings", {}),
                 )
+                async def generate_slots(provider):
+                    if provider is gemini_service:
+                        gemini_args = {
+                            **slot_args,
+                            "slot_limits": {
+                                slot.key: slot.max_chars for slot in template.text_slots
+                            },
+                        }
+                        return await provider.generate_template_slots(**gemini_args)
+                    return await provider.generate_template_slots(**slot_args)
+
                 try:
-                    slot_values, generated_caption = await slot_generator.generate_template_slots(**slot_args)
+                    slot_values, generated_caption = await generate_slots(slot_generator)
                 except Exception as primary_slot_error:
                     logger.warning("%s slot generation failed; trying alternate provider: %s", active_provider, primary_slot_error)
                     try:
-                        slot_values, generated_caption = await backup_generator.generate_template_slots(**slot_args)
+                        slot_values, generated_caption = await generate_slots(backup_generator)
                     except Exception as backup_slot_error:
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
