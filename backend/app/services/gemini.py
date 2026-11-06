@@ -63,7 +63,7 @@ class GeminiService:
         last_error: Optional[Exception] = None
         for attempt in range(3):
             try:
-                async with httpx.AsyncClient(timeout=self.settings.LLAMA_TIMEOUT) as client:
+                async with httpx.AsyncClient(timeout=self.settings.GEMINI_TIMEOUT) as client:
                     response = await client.post(
                         self._url(),
                         headers={
