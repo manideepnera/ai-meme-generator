@@ -33,9 +33,12 @@ class FallbackMemeService:
             caption=caption,
             text_position="bottom",
             keywords=keywords,
-            use_cases=["relatable", "product_promotion"],
-            intent="positive_surprise",
-            template_slots={},
+            use_cases=["preference", "comparison"],
+            intent="preference",
+            template_slots={
+                "nope": "Other options",
+                "yep": topic[:28],
+            },
         )
 
     def render_image_base64(self, description: str, caption: str) -> str:
