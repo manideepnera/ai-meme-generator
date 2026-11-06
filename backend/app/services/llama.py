@@ -517,12 +517,21 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
         prompt = f"""{self.LIGHT_MODE_SYSTEM_PROMPT}
 
 Meme Template: {template_name} ({template_id})
-Required Slots: {", ".join(slot_keys)}
+Template purpose: {template_purpose}
+Narrative pattern: {narrative_pattern}
+Required slots and their exact meanings:
+{json.dumps(slot_meanings or {}, ensure_ascii=False)}
 
-Product/Company Description:
+Required slot keys: {", ".join(slot_keys)}
+
+Product/Company Description and user requirements:
 {company_description}
 
-Generate filling for the slots and a catchy caption. Respond with ONLY JSON:"""
+Generate a coherent joke that follows this template's narrative pattern.
+Each slot must fulfil its stated role; do not just split keywords across slots.
+Keep each slot concise (ideally 2-8 words), natural, readable, and directly related
+to the product. Make the full set of slots work together as one joke.
+Return every required slot key exactly once, plus a short caption. JSON only:"""
 
         payload = self._build_request_payload(prompt)
         headers = self._get_auth_headers()
