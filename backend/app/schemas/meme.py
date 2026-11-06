@@ -85,6 +85,26 @@ class MemeGenerateResponse(BaseModel):
         None,
         description="The image generation prompt used (for debugging)"
     )
+
+    template_id: Optional[str] = Field(
+        None,
+        description="Identifier of the existing meme template selected"
+    )
+
+    template_name: Optional[str] = Field(
+        None,
+        description="Human-readable name of the selected meme template"
+    )
+
+    template_score: Optional[float] = Field(
+        None,
+        description="Semantic matching score for the selected template"
+    )
+
+    template_reason: Optional[str] = Field(
+        None,
+        description="Short explanation of why the template was selected"
+    )
     
     @field_validator("image_url", "image_base64")
     @classmethod
