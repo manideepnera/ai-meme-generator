@@ -8,7 +8,8 @@ A FastAPI service that turns product or brand information into memes using an ex
 Product details + optional meme requirements
                  |
                  v
-        LLaMA concept generation
+        LLaMA concept generation (primary)
+        - if unavailable, Google Gemini fallback
         - understand product and audience
         - identify joke intent and use case
                  |
@@ -67,7 +68,7 @@ source venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-Configure `.env` using `.env.example`. Set `LLAMA_API_URL` and any required authentication values. If the LLaMA service is unavailable, a deterministic local concept fallback is used.
+Configure `.env` using `.env.example`. Set `LLAMA_API_URL` and any required LLaMA authentication values. Also set `GOOGLE_API_KEY` to enable automatic Gemini fallback when LLaMA fails. The default Gemini model is `gemini-2.5-flash`; override it with `GEMINI_MODEL` if needed. The key is read only by the backend and must never be placed in frontend environment variables. If both AI providers fail, the API returns a clear HTTP 502 error. Turning the LLaMA switch off in the UI intentionally uses the local deterministic concept fallback instead.
 
 Start the API from the `backend` directory:
 
