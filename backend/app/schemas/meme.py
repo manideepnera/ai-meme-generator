@@ -28,6 +28,11 @@ class MemeGenerateRequest(BaseModel):
     orchestrates the meme generation process.
     """
     
+    use_llama: bool = Field(
+        True,
+        description="Use the configured LLaMA API. When false, use the local concept fallback."
+    )
+
     company_description: str = Field(
         ...,
         min_length=10,
