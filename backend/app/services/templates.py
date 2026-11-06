@@ -250,13 +250,13 @@ class TemplateService:
                 slot_values["yep"] = concept.caption
         
         elif template.id == "two_buttons":
-            # Expects: option_1, option_2
+            # Template JSON defines choice_1 and choice_2.
             if len(concept.keywords) >= 2:
-                slot_values["option_1"] = concept.keywords[0]
-                slot_values["option_2"] = concept.keywords[1]
+                slot_values["choice_1"] = concept.keywords[0]
+                slot_values["choice_2"] = concept.keywords[1]
             else:
-                slot_values["option_1"] = "Choice A"
-                slot_values["option_2"] = concept.caption
+                slot_values["choice_1"] = "The expected choice"
+                slot_values["choice_2"] = concept.caption
         
         elif template.id == "expanding_brain":
             # Expects: level_1, level_2, level_3, level_4
@@ -272,21 +272,26 @@ class TemplateService:
             slot_values["statement"] = concept.caption
             
         elif template.id == "monkey_puppet":
-            # Expects: reaction
-            slot_values["reaction"] = concept.caption
+            # Template JSON defines before and after panels.
+            if len(concept.keywords) >= 2:
+                slot_values["before"] = concept.keywords[0]
+                slot_values["after"] = concept.keywords[1]
+            else:
+                slot_values["before"] = "Before understanding the problem"
+                slot_values["after"] = concept.caption
             
         elif template.id == "hands_up_opinion":
             # Expects: opinion
             slot_values["opinion"] = concept.caption
             
         elif template.id == "woman_yelling_cat":
-            # Expects: yelling_woman, confused_cat
+            # Template JSON defines yelling and cat panels.
             if len(concept.keywords) >= 2:
-                slot_values["yelling_woman"] = concept.keywords[0]
-                slot_values["confused_cat"] = concept.keywords[1]
+                slot_values["yelling"] = concept.keywords[0]
+                slot_values["cat"] = concept.keywords[1]
             else:
-                slot_values["yelling_woman"] = "Competitors"
-                slot_values["confused_cat"] = concept.caption
+                slot_values["yelling"] = "The expected solution"
+                slot_values["cat"] = concept.caption
 
         # Final check and char limit enforcement
         final_values = {}
