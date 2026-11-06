@@ -72,10 +72,10 @@ async def test_product_concept_selects_and_renders_matching_existing_template():
     from app.routes.meme import generate_meme
     from app.schemas.meme import LlamaOutput, MemeGenerateRequest
 
-    class FakeLlama:
+    class FakeGemini:
         async def generate_meme_concept(self, _description):
             return LlamaOutput(
-                image_prompt="not_used_existing_template",
+                image_prompt="existing_template_only",
                 negative_prompt="",
                 caption="When the cold drink wins every time",
                 text_position="bottom",
@@ -85,14 +85,35 @@ async def test_product_concept_selects_and_renders_matching_existing_template():
                 template_slots={},
             )
 
-        async def generate_template_slots(self, **kwargs):
-            assert kwargs["template_id"] == "distracted_boyfriend"
-            assert "tempting new alternative" in kwargs["template_purpose"]
+        async def evaluate_templates(self, concept, candidates):
+            assert candidates[0]["template_id"] == "distracted_boyfriend"
             return {
-                "subject": "Me",
-                "old_option": "Surviving summer",
-                "new_option": "Ice-cold Coca-Cola",
-            }, "Summer plans changed instantly"
+                "template_id": "distracted_boyfriend",
+                "reason": "The template expresses a clear switch in preference.",
+            }
+
+        async def generate_joke_candidates(self, **kwargs):
+            assert kwargs["template_id"] == "distracted_boyfriend"
+            assert kwargs["slot_limits"]
+            return [
+                {"id": "A", "caption": "Hydration wins", "template_slots": {
+                    "subject": "Me", "old_option": "Working all day", "new_option": "Drinking water"
+                }},
+                {"id": "B", "caption": "Bottle reminder", "template_slots": {
+                    "subject": "Me", "old_option": "Ignoring thirst", "new_option": "HydroTrack reminder"
+                }},
+                {"id": "C", "caption": "Smart hydration", "template_slots": {
+                    "subject": "Me", "old_option": "One more task", "new_option": "Time for water"
+                }},
+            ]
+
+        async def evaluate_joke_candidates(self, concept, candidates):
+            assert len(candidates) == 3
+            return {
+                **candidates[1],
+                "selection_reason": "Best product-specific punchline.",
+                "scores": {"A": 7, "B": 9, "C": 8},
+            }
 
     service = TemplateService()
     response = await generate_meme(
@@ -102,7 +123,7 @@ async def test_product_concept_selects_and_renders_matching_existing_template():
                 "summer meme for college students about ice-cold refreshment."
             )
         ),
-        llama_service=FakeLlama(),
+        gemini_service=FakeGemini(),
         template_service=service,
     )
 
@@ -110,4 +131,6 @@ async def test_product_concept_selects_and_renders_matching_existing_template():
     assert response.template_id == "distracted_boyfriend"
     assert response.template_name == "Distracted Boyfriend"
     assert response.template_score and response.template_score >= 0.25
-    assert response.caption == "Summer plans changed instantly"
+    assert response.ai_provider == "gemini"
+    assert response.joke_candidate_count == 3
+    assert response.joke_selection_reason == "Best product-specific punchline."
