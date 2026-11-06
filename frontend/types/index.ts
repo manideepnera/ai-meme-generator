@@ -1,39 +1,31 @@
 export interface MemeGenerationRequest {
-    companyDescription: string;\n    useLlama: boolean;
+    companyDescription: string;
+    useLlama: boolean;
 }
 
-// ============================================
-// BACKEND API RESPONSE TYPES
-// ============================================
-
-/**
- * Response from FastAPI backend POST /api/v1/generate-meme
- * Note: Only ONE of meme_url or image_base64 will be present
- */
 export interface BackendMemeResponse {
-    image_url?: string;     // URL to the generated meme image (optional)
-    image_base64?: string;  // Base64 encoded image data (optional)
-    caption: string;        // Generated caption for the meme
-    text_position: 'top' | 'bottom';\n    template_id?: string;\n    template_name?: string;\n    template_score?: number;\n    template_reason?: string;  // Position of caption text
-}
-
-/**
- * Frontend-normalized response for UI consumption
- */
-export interface MemeGenerationResponse {
-    imageUrl: string;       // Normalized image source (URL or data URI)
+    image_url?: string;
+    image_base64?: string;
     caption: string;
-    memeIdea: string;       // Kept for backwards compatibility (may be empty)
-    textPosition: 'top' | 'bottom';
+    text_position: 'top' | 'bottom';
+    template_id?: string;
+    template_name?: string;
+    template_score?: number;
+    template_reason?: string;
+    ai_provider?: 'llama' | 'gemini' | 'local';
 }
 
-export type GenerationStep =
-    | 'idle'
-    | 'understanding'
-    | 'generating-image'
-    | 'adding-caption'
-    | 'complete'
-    | 'error';
+export interface MemeGenerationResponse {
+    imageUrl: string;
+    caption: string;
+    memeIdea: string;
+    textPosition: 'top' | 'bottom';
+    templateName?: string;
+    templateReason?: string;
+    aiProvider?: 'llama' | 'gemini' | 'local';
+}
+
+export type GenerationStep = 'idle' | 'understanding' | 'generating-image' | 'adding-caption' | 'complete' | 'error';
 
 export interface LoadingState {
     isLoading: boolean;
