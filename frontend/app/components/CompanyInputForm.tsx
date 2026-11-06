@@ -4,24 +4,23 @@ import React, { useState } from 'react';
 import styles from './CompanyInputForm.module.css';
 
 interface CompanyInputFormProps {
-    onGenerate: (description: string, useLlama: boolean) => void;
+    onGenerate: (description: string) => void;
     isLoading: boolean;
-    providerReadiness: { llama: boolean; gemini: boolean } | null;
+    geminiConfigured: boolean | null;
 }
 
 export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
     onGenerate,
     isLoading,
-    providerReadiness,
+    geminiConfigured,
 }) => {
     const [description, setDescription] = useState('');
     const [isFocused, setIsFocused] = useState(false);
-    const [useLlama, setUseLlama] = useState(true);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (description.trim() && !isLoading) {
-            onGenerate(description.trim(), useLlama);
+        if (description.trim().length >= 10 && !isLoading) {
+            onGenerate(description.trim());
         }
     };
 
@@ -32,10 +31,6 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
         "Artisanal coffee subscription service for coffee lovers",
     ];
 
-    const handleExampleClick = (example: string) => {
-        setDescription(example);
-    };
-
     return (
         <div className={styles.formContainer}>
             <form onSubmit={handleSubmit} className={styles.form}>
@@ -44,13 +39,13 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                         Describe your company or product
                     </label>
                     <p className={styles.helperText}>
-                        AI will create a fun, relatable meme for public-facing advertisements.
+                        Gemini will understand your product and create a funny, relatable meme using an existing template.
                     </p>
                     <div className={`${styles.textareaContainer} ${isFocused ? styles.focused : ''}`}>
                         <textarea
                             id="company-description"
                             className={styles.textarea}
-                            placeholder="Example: A cold drink that helps people survive summer heat"
+                            placeholder="Example: A smart water bottle that tracks hydration and reminds busy people to drink water"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             onFocus={() => setIsFocused(true)}
@@ -66,25 +61,17 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
 
                 <div className={styles.llamaControl}>
                     <div className={styles.llamaControlText}>
-                        <span className={styles.llamaTitle}>Use LLaMA AI</span>
+                        <span className={styles.llamaTitle}>AI provider</span>
                         <span className={styles.llamaDescription}>
-                            {useLlama ? 'LLaMA first, Gemini backup if LLaMA fails.' : 'Both AI providers disabled. Use the local concept fallback.'}
-                        {providerReadiness && <span className={styles.providerStatus}>LLaMA: {providerReadiness.llama ? 'configured' : 'not configured'} · Gemini: {providerReadiness.gemini ? 'configured' : 'not configured'}</span>}
+                            Google Gemini · 3 joke candidates · automatic quality selection
+                            {geminiConfigured !== null && (
+                                <span className={styles.providerStatus}>
+                                    Gemini API key: {geminiConfigured ? 'configured' : 'not configured'}
+                                </span>
+                            )}
                         </span>
                     </div>
-                    <label className={styles.switch}>
-                        <input
-                            type="checkbox"
-                            checked={useLlama}
-                            onChange={(event) => setUseLlama(event.target.checked)}
-                            disabled={isLoading}
-                            aria-label="Use LLaMA AI"
-                        />
-                        <span className={styles.switchSlider}></span>
-                    </label>
-                    <span className={useLlama ? styles.modeOn : styles.modeOff}>
-                        {useLlama ? 'ON' : 'OFF'}
-                    </span>
+                    <span className={styles.modeOn}>GEMINI</span>
                 </div>
 
                 <button
@@ -99,16 +86,8 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                         </>
                     ) : (
                         <>
-                            <svg
-                                className={styles.buttonIcon}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                                    fill="currentColor"
-                                />
+                            <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z" fill="currentColor" />
                             </svg>
                             Generate Marketing Meme
                         </>
@@ -123,7 +102,7 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                                 key={index}
                                 type="button"
                                 className={styles.exampleChip}
-                                onClick={() => handleExampleClick(example)}
+                                onClick={() => setDescription(example)}
                                 disabled={isLoading}
                             >
                                 {example}
