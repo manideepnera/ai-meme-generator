@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './page.module.css';
 import { Header } from './components/Header';
 import { CompanyInputForm } from './components/CompanyInputForm';
@@ -34,6 +34,21 @@ export default function Home() {
   // ERROR STATE - Tracks API errors
   // ============================================
   const [error, setError] = useState<ErrorInfo | null>(null);
+  const [providerReadiness, setProviderReadiness] = useState<{ llama: boolean; gemini: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkReadiness = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/health/ready');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) setProviderReadiness({ llama: Boolean(data.configuration?.llama_api_configured), gemini: Boolean(data.configuration?.gemini_api_configured) });
+      } catch { if (!cancelled) setProviderReadiness(null); }
+    };
+    checkReadiness();
+    return () => { cancelled = true; };
+  }, []);
 
   const simulateProgress = (
     stepSequence: GenerationStep[],
@@ -98,7 +113,8 @@ export default function Home() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            company_description: description,\n            use_llama: useLlama
+            company_description: description,
+            use_llama: useLlama
           }),
         });
 
@@ -122,6 +138,9 @@ export default function Home() {
           caption: backendData.caption,
           memeIdea: '', // Kept for UI compatibility
           textPosition: backendData.text_position,
+          templateName: backendData.template_name,
+          templateReason: backendData.template_reason,
+          aiProvider: backendData.ai_provider,
         };
 
         // Set result and complete
@@ -183,6 +202,7 @@ export default function Home() {
         <CompanyInputForm
           onGenerate={handleGenerate}
           isLoading={loadingState.isLoading}
+          providerReadiness={providerReadiness}
         />
 
         {loadingState.isLoading && (
@@ -211,7 +231,7 @@ export default function Home() {
         {/* Footer */}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            Existing meme templates • LLaMA-powered concept generation
+            Existing meme templates • LLaMA primary • Gemini automatic backup
           </p>
         </footer>
       </div>
