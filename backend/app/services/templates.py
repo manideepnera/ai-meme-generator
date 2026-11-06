@@ -324,7 +324,7 @@ class TemplateService:
                 current = candidate
         if current:
             lines.append(current)
-        return "\\n".join(lines)
+        return "\n".join(lines)
 
     def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
         """Render captions with measured wrapping and adaptive font sizing.
