@@ -97,21 +97,24 @@ async def generate_meme(
     # STEP 1: Generate a concept with LLaMA, falling back locally on failure
     # ==========================================================================
     fallback_service = FallbackMemeService()
-    try:
-        logger.info("Step 1: Calling LLaMA API for meme concept generation...")
-        llama_output = await llama_service.generate_meme_concept(
-            request.company_description
-        )
-        logger.info(
-            f"LLaMA generated concept: caption='{llama_output.caption[:50]}...', "
-            f"position={llama_output.text_position}"
-        )
-    except Exception as e:
-        logger.warning(
-            "LLaMA concept generation failed; using a local fallback concept: %s",
-            e,
-            exc_info=True,
-        )
+    if request.use_llama:
+        try:
+            logger.info("LLaMA mode is ON. Calling configured LLaMA API...")
+            llama_output = await llama_service.generate_meme_concept(
+                request.company_description
+            )
+            logger.info("LLaMA concept generation succeeded.")
+        except Exception as e:
+            logger.error("LLaMA mode is ON but the API call failed: %s", e, exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "error": "llama_unavailable",
+                    "message": "LLaMA is enabled but could not generate a concept. Check the endpoint, credentials, and model service. Turn LLaMA off to use the local fallback.",
+                },
+            ) from e
+    else:
+        logger.info("LLaMA mode is OFF. Using the local concept fallback.")
         llama_output = fallback_service.create_concept(request.company_description)
 
     # STEP 2: Select and render an existing meme template
