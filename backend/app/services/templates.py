@@ -220,8 +220,11 @@ class TemplateService:
             # Check if all required keys are present
             required_keys = set(slot.key for slot in template.text_slots)
             if required_keys.issubset(set(concept.template_slots.keys())):
-                logger.info(f"Using LLM-provided slots for {template.id}")
-                return {k: concept.template_slots[k] for k in required_keys}
+                logger.info(f"Using concept-provided slots for {template.id}")
+                return {
+                    slot.key: self.sanitize_text(concept.template_slots[slot.key], slot.max_chars)
+                    for slot in template.text_slots
+                }
 
         slot_values = {}
         
