@@ -257,6 +257,7 @@ async def readiness_check(
     settings = get_settings()
 
     llama_configured = bool(settings.LLAMA_API_URL)
+    gemini_configured = bool(settings.GOOGLE_API_KEY)
     templates_loaded = bool(template_service.templates)
     catalog_loaded = bool(template_service.intelligence)
 
@@ -264,12 +265,15 @@ async def readiness_check(
         "status": "ready" if templates_loaded and catalog_loaded else "not_ready",
         "configuration": {
             "llama_api_configured": llama_configured,
+            "gemini_api_configured": gemini_configured,
+            "gemini_model": settings.GEMINI_MODEL,
             "template_count": len(template_service.templates),
             "template_intelligence_loaded": catalog_loaded,
         },
         "warnings": [
             message for message in [
-                None if llama_configured else "LLAMA_API_URL not configured; local concept fallback will be used",
+                None if llama_configured else "LLAMA_API_URL not configured; Gemini will be tried when GOOGLE_API_KEY is set",
+                None if gemini_configured else "GOOGLE_API_KEY not configured; Gemini cannot be used as the LLaMA fallback",
                 None if templates_loaded else "No meme templates were loaded",
                 None if catalog_loaded else "Template intelligence catalog is missing",
             ] if message
