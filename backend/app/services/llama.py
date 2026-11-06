@@ -500,8 +500,11 @@ Generate a meme concept for this company. Respond with ONLY the JSON object:"""
         self, 
         template_id: str, 
         template_name: str, 
-        slot_keys: List[str], 
-        company_description: str
+        slot_keys: List[str],
+        company_description: str,
+        template_purpose: str = "",
+        narrative_pattern: str = "",
+        slot_meanings: Optional[Dict[str, str]] = None,
     ) -> Tuple[Dict[str, str], str]:
         """
         Generate slot values and caption for a specific template (Light Mode).
