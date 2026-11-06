@@ -153,14 +153,23 @@ async def generate_meme(
             rendered_image = template_service.render_template(template, slot_values)
             
             image_base64 = template_service.image_to_base64(rendered_image)
-            
+            selected_match = next(
+                (item for item in template_service.rank_templates(llama_output)
+                 if item["template_id"] == template.id),
+                {},
+            )
+
             logger.info("Template-based generation successful!")
             return MemeGenerateResponse(
                 image_url=None,
                 image_base64=image_base64,
                 caption=caption,
                 text_position=llama_output.text_position,
-                image_prompt=llama_output.image_prompt,
+                image_prompt="Existing template renderer; no AI image generation used.",
+                template_id=template.id,
+                template_name=template.name,
+                template_score=selected_match.get("score"),
+                template_reason="; ".join(selected_match.get("reasons", [])),
             )
         else:
             logger.info("No suitable template matched. Falling back to AI image generation.")
