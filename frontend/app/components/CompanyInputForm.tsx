@@ -6,11 +6,13 @@ import styles from './CompanyInputForm.module.css';
 interface CompanyInputFormProps {
     onGenerate: (description: string, useLlama: boolean) => void;
     isLoading: boolean;
+    providerReadiness: { llama: boolean; gemini: boolean } | null;
 }
 
 export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
     onGenerate,
     isLoading,
+    providerReadiness,
 }) => {
     const [description, setDescription] = useState('');
     const [isFocused, setIsFocused] = useState(false);\n    const [useLlama, setUseLlama] = useState(true);
@@ -66,6 +68,7 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                         <span className={styles.llamaTitle}>Use LLaMA AI</span>
                         <span className={styles.llamaDescription}>
                             {useLlama ? 'LLaMA first, Gemini backup if LLaMA fails.' : 'Both AI providers disabled. Use the local concept fallback.'}
+                        {providerReadiness && <span className={styles.providerStatus}>LLaMA: {providerReadiness.llama ? 'configured' : 'not configured'} · Gemini: {providerReadiness.gemini ? 'configured' : 'not configured'}</span>}
                         </span>
                     </div>
                     <label className={styles.switch}>
