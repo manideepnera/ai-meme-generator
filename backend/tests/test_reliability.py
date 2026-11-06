@@ -78,9 +78,18 @@ def test_every_registered_template_can_receive_all_required_slots():
 
 @pytest.mark.asyncio
 async def test_api_does_not_generate_an_image_when_no_template_matches():
-    class FailingLlama:
+    class WorkingLlama:
         async def generate_meme_concept(self, _description):
-            raise RuntimeError("LLaMA unavailable")
+            return LlamaOutput(
+                image_prompt="A funny scene about a small-business operations app",
+                negative_prompt="blurry",
+                caption="When every order is finally organised",
+                text_position="bottom",
+                keywords=["small business", "orders", "operations"],
+                use_cases=["relatable"],
+                intent="relatable",
+                template_slots={},
+            )
 
     class NoTemplateMatch:
         def match_template(self, _concept):
@@ -97,7 +106,7 @@ async def test_api_does_not_generate_an_image_when_no_template_matches():
                     "orders and daily operations"
                 )
             ),
-            llama_service=FailingLlama(),
+            llama_service=WorkingLlama(),
             template_service=NoTemplateMatch(),
         )
 
