@@ -15,7 +15,8 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
     providerReadiness,
 }) => {
     const [description, setDescription] = useState('');
-    const [isFocused, setIsFocused] = useState(false);\n    const [useLlama, setUseLlama] = useState(true);
+    const [isFocused, setIsFocused] = useState(false);
+    const [useLlama, setUseLlama] = useState(true);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
