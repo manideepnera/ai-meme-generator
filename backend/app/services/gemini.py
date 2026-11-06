@@ -89,7 +89,7 @@ class GeminiService:
     ) -> Tuple[Dict[str, str], str]:
         """Generate concise, template-aware captions and validate every slot."""
         limits = slot_limits or {}
-        limit_instructions = "\\n".join(
+        limit_instructions = "\n".join(
             f"- {key}: maximum {limits[key]} characters"
             for key in slot_keys if key in limits
         ) or "- Keep each slot to 2-8 words."
@@ -137,7 +137,7 @@ include a short caption. Return valid JSON only."""
                     for key in invalid
                 )
                 prompt += (
-                    "\\n\\nREPAIR REQUIRED: Your previous response had invalid slots: "
+                    "\n\nREPAIR REQUIRED: Your previous response had invalid slots: "
                     f"{violations}. Rewrite the entire joke with every slot within its "
                     "strict limit. Prefer shorter wording; do not truncate words and "
                     "do not use ellipses. Return JSON only."
