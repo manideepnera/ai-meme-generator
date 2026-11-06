@@ -50,22 +50,13 @@ async def lifespan(app: FastAPI):
     
     # Log configuration status (without exposing secrets)
     logger.info(f"Debug mode: {settings.DEBUG}")
-    logger.info(f"LLaMA API URL configured: {bool(settings.LLAMA_API_URL)}")
-    logger.info(f"LLaMA auth type: {settings.LLAMA_AUTH_TYPE}")
-    logger.info(f"Colab API URL configured: {bool(settings.COLAB_API_URL)}")
+    logger.info(f"Gemini API key configured: {bool(settings.GOOGLE_API_KEY)}")
+    logger.info(f"Gemini model: {settings.GEMINI_MODEL}")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
     
     # Warn about missing configuration
-    if not settings.LLAMA_API_URL:
-        logger.warning(
-            "⚠️  LLAMA_API_URL is not configured. "
-            "Set this in your .env file before making requests."
-        )
-    if not settings.COLAB_API_URL:
-        logger.warning(
-            "⚠️  COLAB_API_URL is not configured. "
-            "Set this in your .env file before making requests."
-        )
+    if not settings.GOOGLE_API_KEY:
+        logger.warning("GOOGLE_API_KEY is not configured; meme generation will return an error.")
     
     logger.info("Application startup complete")
     
@@ -89,14 +80,9 @@ app = FastAPI(
     description="""
 ## AI Meme Generator Backend
 
-This API serves as an orchestrator for AI-powered meme generation.
-
-### Flow
-
-1. **Frontend** sends a company/product description
-2. **Backend** calls LLaMA API to generate meme concept
-3. **Backend** forwards concept to Google Colab for image generation
-4. **Backend** returns final meme to frontend
+This API uses Gemini to understand product briefs, evaluate Python-ranked existing meme
+templates, generate multiple joke candidates and select the strongest. Pillow renders the
+captions onto the original template image; no new image generation is used.
 
 ### Key Endpoints
 
@@ -104,10 +90,7 @@ This API serves as an orchestrator for AI-powered meme generation.
 - `GET /api/v1/health` - Health check
 - `GET /api/v1/health/ready` - Readiness check
 
-### Configuration
-
-All external endpoints (LLaMA, Colab) must be configured via environment variables.
-See the README for setup instructions.
+Configure `GOOGLE_API_KEY` and `GEMINI_MODEL` in the backend environment.
     """,
     docs_url="/docs",
     redoc_url="/redoc",
