@@ -310,23 +310,6 @@ class TemplateService:
         return final_values
 
     @staticmethod
-    def _wrap_text(text: str, font: ImageFont.ImageFont, draw: ImageDraw.ImageDraw, max_width: int) -> str:
-        """Wrap text by measured pixel width, preserving whole words."""
-        words = text.split()
-        lines: List[str] = []
-        current = ""
-        for word in words:
-            candidate = f"{current} {word}".strip()
-            if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_width:
-                lines.append(current)
-                current = word
-            else:
-                current = candidate
-        if current:
-            lines.append(current)
-        return "\n".join(lines)
-
-    @staticmethod
     def _wrap_text_to_width(text: str, font: ImageFont.ImageFont, draw: ImageDraw.ImageDraw, max_width: int) -> str:
         """Wrap text using measured pixel width rather than character count."""
         words = text.split()
@@ -341,7 +324,7 @@ class TemplateService:
                 current = candidate
         if current:
             lines.append(current)
-        return "\\n".join(lines)
+        return "\n".join(lines)
 
     def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
         """Render validated captions, shrinking and wrapping text to fit the image."""
@@ -352,7 +335,9 @@ class TemplateService:
         img = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(img)
         style = template.text_style
-        max_width = int(img.width * 0.88)
+        slot_count = max(1, len(template.text_slots))
+        width_ratio = 0.86 if slot_count == 1 else (0.43 if slot_count == 2 else 0.29)
+        max_width = int(img.width * width_ratio)
         max_height = int(img.height * 0.24)
         base_size = style.font_size
         font_candidates = [
