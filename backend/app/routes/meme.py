@@ -124,9 +124,31 @@ async def generate_meme(
         logger.info("Step 2: Attempting template-based generation...")
         template = template_service.match_template(llama_output)
         if template:
-            logger.info(f"Matched template: {template.id}. Filling slots...")
-            slot_values = template_service.fill_template_slots(template, llama_output)
-            
+            logger.info(f"Matched template: {template.id}. Generating template-aware captions...")
+            profile = template_service.get_template_profile(template.id)
+            try:
+                slot_values, generated_caption = await llama_service.generate_template_slots(
+                    template_id=template.id,
+                    template_name=template.name,
+                    slot_keys=[slot.key for slot in template.text_slots],
+                    company_description=request.company_description,
+                    template_purpose=profile.get("purpose", template.description),
+                    narrative_pattern=profile.get("narrative_pattern", ""),
+                    slot_meanings=profile.get("slot_meanings", {}),
+                )
+                required_keys = {slot.key for slot in template.text_slots}
+                if set(slot_values) != required_keys or any(not value.strip() for value in slot_values.values()):
+                    raise ValueError("LLaMA returned incomplete template captions")
+                caption = template_service.sanitize_text(generated_caption, max_chars=150)
+                slot_values = {
+                    slot.key: template_service.sanitize_text(slot_values[slot.key], slot.max_chars)
+                    for slot in template.text_slots
+                }
+            except Exception as caption_error:
+                logger.warning("Template-aware caption generation failed; using local slot fallback: %s", caption_error)
+                slot_values = template_service.fill_template_slots(template, llama_output)
+                caption = llama_output.caption
+
             logger.info(f"Rendering template {template.id}...")
             rendered_image = template_service.render_template(template, slot_values)
             
@@ -136,7 +158,7 @@ async def generate_meme(
             return MemeGenerateResponse(
                 image_url=None,
                 image_base64=image_base64,
-                caption=llama_output.caption,
+                caption=caption,
                 text_position=llama_output.text_position,
                 image_prompt=llama_output.image_prompt,
             )
