@@ -309,57 +309,88 @@ class TemplateService:
             
         return final_values
 
+    @staticmethod
+    def _wrap_text(text: str, font: ImageFont.ImageFont, draw: ImageDraw.ImageDraw, max_width: int) -> str:
+        """Wrap text by measured pixel width, preserving whole words."""
+        words = text.split()
+        lines: List[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        return "\\n".join(lines)
+
     def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
-        """
-        Render the meme template with slot values using Pillow.
+        """Render captions with measured wrapping and adaptive font sizing.
+
+        Slot coordinates remain the template's anchor points. Since the template
+        format does not define per-slot rectangles, safe widths are estimated from
+        image width and slot count; text is never silently truncated.
         """
         image_path = os.path.join(template.base_path, template.image.file)
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Template image not found: {image_path}")
-            
+
         img = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(img)
-        
-        # Attempt to load font
-        font_style = template.text_style
+        style = template.text_style
+        slot_count = max(1, len(template.text_slots))
+        width_ratio = 0.86 if slot_count == 1 else (0.43 if slot_count == 2 else 0.29)
+        max_width = max(120, int(img.width * width_ratio))
+        max_height = max(70, int(img.height * 0.24))
         font_path = "C:\\Windows\\Fonts\\impact.ttf" if os.name == "nt" else None
-        
-        try:
-            if font_path and os.path.exists(font_path):
-                font = ImageFont.truetype(font_path, font_style.font_size)
-            else:
-                font = ImageFont.load_default()
-                logger.warning("Using default font as Impact was not found.")
-        except Exception as e:
-            logger.error(f"Error loading font: {e}")
-            font = ImageFont.load_default()
 
         for slot in template.text_slots:
-            text = slot_values.get(slot.key, "")
-            pos = slot.coordinates
-            
-            # Use text_style from template
-            color = font_style.color
-            stroke_width = font_style.stroke_width if font_style.stroke else 0
-            stroke_fill = font_style.stroke_color
-            
-            # Bounding box for alignment
-            # In regular memes, coordinates are usually center points or top-left.
-            # Here we'll treat them as anchor points based on 'align'
-            anchor = "mm" if font_style.align == "center" else "la"
-            
-            # Draw stroke if needed (Pillow handles this in text() since version 6.2.0)
-            draw.text(
-                pos, 
-                text, 
-                font=font, 
-                fill=color, 
-                stroke_width=stroke_width, 
-                stroke_fill=stroke_fill,
-                anchor=anchor,
-                align=font_style.align
+            text = str(slot_values.get(slot.key, "")).strip()
+            if not text:
+                raise ValueError(f"Caption slot '{slot.key}' is empty.")
+            if len(text) > slot.max_chars:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' exceeds its {slot.max_chars}-character limit."
+                )
+
+            font_size = style.font_size
+            fitted = False
+            while font_size >= 12:
+                try:
+                    font = ImageFont.truetype(font_path, font_size) if font_path and os.path.exists(font_path) else ImageFont.load_default(size=font_size)
+                except (OSError, TypeError):
+                    font = ImageFont.load_default()
+                wrapped = self._wrap_text(text, font, draw, max_width)
+                bbox = draw.multiline_textbbox(
+                    (0, 0), wrapped, font=font, align=style.align,
+                    spacing=max(2, font_size // 8),
+                    stroke_width=style.stroke_width if style.stroke else 0,
+                )
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                if text_width <= max_width and text_height <= max_height:
+                    fitted = True
+                    break
+                font_size -= 2
+
+            if not fitted:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' cannot fit the template's safe text area."
+                )
+
+            draw.multiline_text(
+                slot.coordinates,
+                wrapped,
+                font=font,
+                fill=style.color,
+                stroke_width=style.stroke_width if style.stroke else 0,
+                stroke_fill=style.stroke_color,
+                anchor="mm" if style.align == "center" else "la",
+                align=style.align,
+                spacing=max(2, font_size // 8),
             )
-            
         return img
 
     def image_to_base64(self, img: Image.Image) -> str:
