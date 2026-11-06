@@ -30,7 +30,7 @@ class MemeGenerateRequest(BaseModel):
     
     use_llama: bool = Field(
         True,
-        description="Use the configured LLaMA API. When false, use the local concept fallback."
+        description="Try LLaMA first and automatically use Gemini if it fails. When false, use the local concept fallback."
     )
 
     company_description: str = Field(
