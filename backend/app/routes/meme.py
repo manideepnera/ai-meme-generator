@@ -173,7 +173,7 @@ async def generate_meme(
         template_score=selected_match.get("score"),
         template_reason=template_decision.get("reason") or "; ".join(selected_match.get("reasons", [])),
         ai_provider="gemini",
-        joke_candidates_count=len(candidates),
+        joke_candidate_count=len(candidates),
         joke_selection_reason=selected_joke.get("selection_reason", ""),
     )
 
