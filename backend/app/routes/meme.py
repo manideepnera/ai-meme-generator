@@ -198,6 +198,7 @@ async def generate_meme(
                 template_name=template.name,
                 template_score=selected_match.get("score"),
                 template_reason="; ".join(selected_match.get("reasons", [])),
+                ai_provider=active_provider,
             )
         logger.info("No suitable existing template matched the generated concept.")
     except HTTPException:
