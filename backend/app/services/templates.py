@@ -281,8 +281,8 @@ class TemplateService:
                 slot_values["after"] = concept.caption
             
         elif template.id == "hands_up_opinion":
-            # Expects: opinion
-            slot_values["opinion"] = concept.caption
+            # Template JSON defines a single statement slot.
+            slot_values["statement"] = concept.caption
             
         elif template.id == "woman_yelling_cat":
             # Template JSON defines yelling and cat panels.
