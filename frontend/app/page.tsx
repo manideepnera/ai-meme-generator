@@ -142,6 +142,8 @@ export default function Home() {
           templateName: backendData.template_name,
           templateReason: backendData.template_reason,
           aiProvider: backendData.ai_provider,
+          jokeCandidateCount: backendData.joke_candidate_count,
+          jokeSelectionReason: backendData.joke_selection_reason,
         };
 
         // Set result and complete
