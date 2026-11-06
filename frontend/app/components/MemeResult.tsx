@@ -109,6 +109,8 @@ export const MemeResult: React.FC<MemeResultProps> = ({
                     {result.aiProvider && <span>AI provider: <strong style={{ color: "#fff", textTransform: "capitalize" }}>{result.aiProvider}</strong></span>}
                     {result.templateName && <span> · Template: <strong style={{ color: "#fff" }}>{result.templateName}</strong></span>}
                     {result.templateReason && <p style={{ marginTop: "6px" }}>{result.templateReason}</p>}
+                    {result.jokeCandidateCount && <p style={{ marginTop: "6px" }}>Evaluated {result.jokeCandidateCount} joke candidates.</p>}
+                    {result.jokeSelectionReason && <p style={{ marginTop: "6px" }}>Joke selection: {result.jokeSelectionReason}</p>}
                     {result.jokeCandidateCount && <p style={{ marginTop: "6px" }}>Jokes evaluated: <strong style={{ color: "#fff" }}>{result.jokeCandidateCount}</strong></p>}
                     {result.jokeSelectionReason && <p style={{ marginTop: "6px" }}>Joke selection: {result.jokeSelectionReason}</p>}
                 </div>
