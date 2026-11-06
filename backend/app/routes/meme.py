@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.schemas.meme import MemeGenerateRequest, MemeGenerateResponse, ErrorResponse
-from app.services.gemini import GeminiError, GeminiService
+from app.services.gemini import GeminiService
 from app.services.templates import TemplateService, get_template_service
 
 logger = logging.getLogger(__name__)
