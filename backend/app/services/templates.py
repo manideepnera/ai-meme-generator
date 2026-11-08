@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.meme import LlamaOutput
 from app.config import get_settings
+from app.services.template_intelligence import TemplateIntelligence
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,8 @@ class TemplateService:
         self.keywords: Dict[str, Dict[str, List[str]]] = {}
         self._load_templates()
         self._load_keywords()
+        catalog_path = os.path.join(self.templates_dir, "template_intelligence.json")
+        self.intelligence = TemplateIntelligence(catalog_path) if os.path.exists(catalog_path) else None
 
     def _load_keywords(self):
         """Load template keywords from template_keywords.json."""
@@ -102,48 +105,44 @@ class TemplateService:
         except Exception as e:
             logger.error(f"Failed to load template index: {e}")
 
+    def get_template_profile(self, template_id: str) -> Dict[str, Any]:
+        """Return the curated semantic profile for a template."""
+        if not self.intelligence:
+            return {}
+        return self.intelligence.profiles.get(template_id, {})
+
+    def rank_templates(self, concept: LlamaOutput) -> List[Dict[str, Any]]:
+        """Return semantic template candidates with scores and human-readable reasons."""
+        if not self.intelligence:
+            return []
+        return self.intelligence.rank(concept)
+
     def match_template(self, concept: LlamaOutput) -> Optional[MemeTemplate]:
         """
-        Match a meme concept to a template based on heuristics.
-        Returns the best matching template or None if no match is good enough.
+        Select a template by the meaning and narrative structure of the meme concept.
+
+        Intent and use-case evidence are prioritised. Keywords are supporting
+        evidence, not a standalone template-selection mechanism.
         """
-        best_match = None
-        highest_score = 0.0
+        if not self.intelligence:
+            logger.warning("Template intelligence catalog is unavailable.")
+            return None
 
-        concept_use_cases = set(concept.use_cases or [])
-        concept_keywords = set(k.lower() for k in (concept.keywords or []))
-        concept_intent = concept.intent.lower() if concept.intent else ""
+        selected = self.intelligence.select(concept)
+        if not selected:
+            ranked = self.intelligence.rank(concept)
+            logger.info("No confident template match. Top candidates: %s", ranked[:2])
+            return None
 
-        for template in self.templates.values():
-            score = 0.0
-            
-            # 1. Match use cases (highest weight)
-            template_use_cases = set(template.use_cases)
-            matches = template_use_cases.intersection(concept_use_cases)
-            if matches:
-                score += 0.5 * (len(matches) / len(template_use_cases))
-            
-            # 2. Match intent (medium weight)
-            if concept_intent and concept_intent in template.use_cases:
-                score += 0.3
-            
-            # 3. Match keywords in description or name (lower weight)
-            template_text = (template.name + " " + template.description).lower()
-            keyword_matches = [k for k in concept_keywords if k in template_text]
-            if keyword_matches:
-                score += 0.2 * (len(keyword_matches) / max(len(concept_keywords), 1))
-
-            # 4. Check for specific template mentioned in caption (bonus)
-            if template.id.replace("_", " ") in concept.caption.lower() or template.name.lower() in concept.caption.lower():
-                score += 0.4
-
-            logger.debug(f"Template {template.id} score: {score} (threshold: {template.confidence_threshold})")
-            
-            if score >= template.confidence_threshold and score > highest_score:
-                highest_score = score
-                best_match = template
-
-        return best_match
+        template = self.templates.get(selected["template_id"])
+        if template:
+            logger.info(
+                "Selected template %s (score %.3f): %s",
+                template.id,
+                selected["score"],
+                "; ".join(selected["reasons"]),
+            )
+        return template
 
     def match_templates_by_keywords(self, description: str, threshold: int = 3) -> Optional[MemeTemplate]:
         """
@@ -221,8 +220,11 @@ class TemplateService:
             # Check if all required keys are present
             required_keys = set(slot.key for slot in template.text_slots)
             if required_keys.issubset(set(concept.template_slots.keys())):
-                logger.info(f"Using LLM-provided slots for {template.id}")
-                return {k: concept.template_slots[k] for k in required_keys}
+                logger.info(f"Using concept-provided slots for {template.id}")
+                return {
+                    slot.key: self.sanitize_text(concept.template_slots[slot.key], slot.max_chars)
+                    for slot in template.text_slots
+                }
 
         slot_values = {}
         
@@ -250,13 +252,13 @@ class TemplateService:
                 slot_values["yep"] = concept.caption
         
         elif template.id == "two_buttons":
-            # Expects: option_1, option_2
+            # Template JSON defines choice_1 and choice_2.
             if len(concept.keywords) >= 2:
-                slot_values["option_1"] = concept.keywords[0]
-                slot_values["option_2"] = concept.keywords[1]
+                slot_values["choice_1"] = concept.keywords[0]
+                slot_values["choice_2"] = concept.keywords[1]
             else:
-                slot_values["option_1"] = "Choice A"
-                slot_values["option_2"] = concept.caption
+                slot_values["choice_1"] = "The expected choice"
+                slot_values["choice_2"] = concept.caption
         
         elif template.id == "expanding_brain":
             # Expects: level_1, level_2, level_3, level_4
@@ -272,21 +274,26 @@ class TemplateService:
             slot_values["statement"] = concept.caption
             
         elif template.id == "monkey_puppet":
-            # Expects: reaction
-            slot_values["reaction"] = concept.caption
+            # Template JSON defines before and after panels.
+            if len(concept.keywords) >= 2:
+                slot_values["before"] = concept.keywords[0]
+                slot_values["after"] = concept.keywords[1]
+            else:
+                slot_values["before"] = "Before understanding the problem"
+                slot_values["after"] = concept.caption
             
         elif template.id == "hands_up_opinion":
-            # Expects: opinion
-            slot_values["opinion"] = concept.caption
+            # Template JSON defines a single statement slot.
+            slot_values["statement"] = concept.caption
             
         elif template.id == "woman_yelling_cat":
-            # Expects: yelling_woman, confused_cat
+            # Template JSON defines yelling and cat panels.
             if len(concept.keywords) >= 2:
-                slot_values["yelling_woman"] = concept.keywords[0]
-                slot_values["confused_cat"] = concept.keywords[1]
+                slot_values["yelling"] = concept.keywords[0]
+                slot_values["cat"] = concept.keywords[1]
             else:
-                slot_values["yelling_woman"] = "Competitors"
-                slot_values["confused_cat"] = concept.caption
+                slot_values["yelling"] = "The expected solution"
+                slot_values["cat"] = concept.caption
 
         # Final check and char limit enforcement
         final_values = {}
@@ -302,57 +309,123 @@ class TemplateService:
             
         return final_values
 
+    @staticmethod
+    def _wrap_text_to_width(text: str, font: ImageFont.ImageFont, draw: ImageDraw.ImageDraw, max_width: int) -> str:
+        """Wrap text using measured pixel width rather than character count."""
+        words = text.split()
+        lines: List[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and draw.textlength(candidate, font=font) > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        return "\n".join(lines)
+
     def render_template(self, template: MemeTemplate, slot_values: Dict[str, str]) -> Image.Image:
-        """
-        Render the meme template with slot values using Pillow.
-        """
+        """Render validated captions, shrinking and wrapping text to fit the image."""
+        for slot in template.text_slots:
+            value = str(slot_values.get(slot.key, "")).strip()
+            if not value:
+                raise ValueError(f"Caption slot '{slot.key}' is empty.")
+            if len(value) > slot.max_chars:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' exceeds its {slot.max_chars}-character limit."
+                )
+
         image_path = os.path.join(template.base_path, template.image.file)
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Template image not found: {image_path}")
-            
+
         img = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(img)
-        
-        # Attempt to load font
-        font_style = template.text_style
-        font_path = "C:\\Windows\\Fonts\\impact.ttf" if os.name == "nt" else None
-        
-        try:
-            if font_path and os.path.exists(font_path):
-                font = ImageFont.truetype(font_path, font_style.font_size)
-            else:
-                font = ImageFont.load_default()
-                logger.warning("Using default font as Impact was not found.")
-        except Exception as e:
-            logger.error(f"Error loading font: {e}")
-            font = ImageFont.load_default()
+        style = template.text_style
+        slot_count = max(1, len(template.text_slots))
+        width_ratio = 0.86 if slot_count == 1 else (0.43 if slot_count == 2 else 0.29)
+        max_width = int(img.width * width_ratio)
+        max_height = int(img.height * 0.24)
+        base_size = style.font_size
+        font_candidates = [
+            "C:/Windows/Fonts/impact.ttf",
+            "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ]
 
         for slot in template.text_slots:
-            text = slot_values.get(slot.key, "")
-            pos = slot.coordinates
-            
-            # Use text_style from template
-            color = font_style.color
-            stroke_width = font_style.stroke_width if font_style.stroke else 0
-            stroke_fill = font_style.stroke_color
-            
-            # Bounding box for alignment
-            # In regular memes, coordinates are usually center points or top-left.
-            # Here we'll treat them as anchor points based on 'align'
-            anchor = "mm" if font_style.align == "center" else "la"
-            
-            # Draw stroke if needed (Pillow handles this in text() since version 6.2.0)
-            draw.text(
-                pos, 
-                text, 
-                font=font, 
-                fill=color, 
-                stroke_width=stroke_width, 
-                stroke_fill=stroke_fill,
+            text = str(slot_values.get(slot.key, "")).strip()
+            if not text:
+                raise ValueError(f"Caption slot '{slot.key}' is empty.")
+            if len(text) > slot.max_chars:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' exceeds its {slot.max_chars}-character limit."
+                )
+
+            fitted = None
+            for size in range(base_size, 11, -1):
+                font = None
+                for font_path in font_candidates:
+                    if os.path.exists(font_path):
+                        try:
+                            font = ImageFont.truetype(font_path, size)
+                            break
+                        except OSError:
+                            continue
+                if font is None:
+                    font = ImageFont.load_default()
+
+                wrapped = self._wrap_text_to_width(text, font, draw, max_width)
+                if len(wrapped.splitlines()) > 3:
+                    continue
+                bbox = draw.multiline_textbbox(
+                    (0, 0), wrapped, font=font, align=style.align, spacing=max(2, size // 5),
+                    stroke_width=style.stroke_width if style.stroke else 0,
+                )
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                if text_width <= max_width and text_height <= max_height:
+                    fitted = (font, wrapped, size)
+                    break
+
+            if fitted is None:
+                raise ValueError(
+                    f"Caption slot '{slot.key}' cannot fit the template's visual text area."
+                )
+
+            font, wrapped, fitted_size = fitted
+            x, y = slot.coordinates
+            anchor = "mm" if style.align == "center" else "la"
+            rendered_bounds = draw.multiline_textbbox(
+                (x, y),
+                wrapped,
+                font=font,
                 anchor=anchor,
-                align=font_style.align
+                align=style.align,
+                spacing=max(2, fitted_size // 5),
+                stroke_width=style.stroke_width if style.stroke else 0,
             )
-            
+            if (
+                rendered_bounds[0] < 0 or rendered_bounds[1] < 0
+                or rendered_bounds[2] > img.width or rendered_bounds[3] > img.height
+            ):
+                raise ValueError(
+                    f"Caption slot '{slot.key}' would extend beyond the image boundary."
+                )
+            draw.multiline_text(
+                (x, y),
+                wrapped,
+                font=font,
+                fill=style.color,
+                stroke_width=style.stroke_width if style.stroke else 0,
+                stroke_fill=style.stroke_color,
+                anchor=anchor,
+                align=style.align,
+                spacing=max(2, fitted_size // 5),
+            )
+
         return img
 
     def image_to_base64(self, img: Image.Image) -> str:

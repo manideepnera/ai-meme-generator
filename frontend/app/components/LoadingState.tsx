@@ -11,9 +11,9 @@ interface LoadingStateProps {
 
 const stepMessages: Record<GenerationStep, string> = {
     idle: '',
-    understanding: 'Creating meme concept...',
-    'generating-image': 'Generating image...',
-    'adding-caption': 'Finalizing meme...',
+    understanding: 'LLaMA 3 is understanding your product...',
+    'generating-image': 'Selecting a meme template and generating the SDXL visual...',
+    'adding-caption': 'BLIP-2 is analysing the visual; OpenCV is composing the meme...',
     complete: '✅ Complete!',
     error: '❌ Something went wrong',
 };
@@ -97,12 +97,12 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
                         }
                     />
                     <StepIndicator
-                        label="Image"
+                        label="Template"
                         isActive={currentStep === 'generating-image'}
                         isComplete={['adding-caption', 'complete'].includes(currentStep)}
                     />
                     <StepIndicator
-                        label="Finalizing"
+                        label="Rendering"
                         isActive={currentStep === 'adding-caption'}
                         isComplete={currentStep === 'complete'}
                     />

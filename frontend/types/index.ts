@@ -1,39 +1,37 @@
 export interface MemeGenerationRequest {
-    companyDescription: string;
+    company: string;
+    product: string;
+    advertising_objective: string;
+    audience: string;
 }
 
-// ============================================
-// BACKEND API RESPONSE TYPES
-// ============================================
-
-/**
- * Response from FastAPI backend POST /api/v1/generate-meme
- * Note: Only ONE of meme_url or image_base64 will be present
- */
 export interface BackendMemeResponse {
-    image_url?: string;     // URL to the generated meme image (optional)
-    image_base64?: string;  // Base64 encoded image data (optional)
-    caption: string;        // Generated caption for the meme
-    text_position: 'top' | 'bottom';  // Position of caption text
-}
-
-/**
- * Frontend-normalized response for UI consumption
- */
-export interface MemeGenerationResponse {
-    imageUrl: string;       // Normalized image source (URL or data URI)
+    image_url?: string;
+    image_base64?: string;
     caption: string;
-    memeIdea: string;       // Kept for backwards compatibility (may be empty)
-    textPosition: 'top' | 'bottom';
+    text_position: 'top' | 'bottom';
+    template_id?: string;
+    template_name?: string;
+    template_score?: number;
+    template_reason?: string;
+    ai_provider?: string;
+    joke_candidate_count?: number;
+    joke_selection_reason?: string;
 }
 
-export type GenerationStep =
-    | 'idle'
-    | 'understanding'
-    | 'generating-image'
-    | 'adding-caption'
-    | 'complete'
-    | 'error';
+export interface MemeGenerationResponse {
+    imageUrl: string;
+    caption: string;
+    memeIdea: string;
+    textPosition: 'top' | 'bottom';
+    templateName?: string;
+    templateReason?: string;
+    aiProvider?: string;
+    jokeCandidateCount?: number;
+    jokeSelectionReason?: string;
+}
+
+export type GenerationStep = 'idle' | 'understanding' | 'generating-image' | 'adding-caption' | 'complete' | 'error';
 
 export interface LoadingState {
     isLoading: boolean;

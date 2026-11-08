@@ -220,3 +220,35 @@
         padding: 6px 12px;
     }
 }
+
+.llamaControl {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    margin: 0 0 22px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+.llamaControlText { display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.llamaTitle { color: var(--text-primary); font-weight: 650; font-size: 0.92rem; }
+.llamaDescription { color: var(--text-muted); font-size: 0.78rem; line-height: 1.4; }
+.switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switchSlider { position: absolute; inset: 0; cursor: pointer; background: #777; border-radius: 99px; transition: .2s; }
+.switchSlider:before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .2s; }
+.switch input:checked + .switchSlider { background: var(--primary-500); }
+.switch input:checked + .switchSlider:before { transform: translateX(20px); }
+.switch input:disabled + .switchSlider { opacity: .5; cursor: not-allowed; }
+.modeOn, .modeOff { min-width: 30px; font-size: .72rem; font-weight: 800; letter-spacing: .04em; }
+.modeOn { color: #16a34a; }
+.modeOff { color: var(--text-muted); }
+
+
+.providerStatus {
+    display: block;
+    margin-top: 6px;
+    color: #a1a1aa;
+    font-size: 12px;
+}
