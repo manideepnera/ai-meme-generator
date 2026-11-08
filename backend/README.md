@@ -1,83 +1,82 @@
 # AI Meme Generator Backend
 
-A FastAPI service that creates marketing memes using Google Gemini and a curated library of existing meme templates. Gemini generates and evaluates text; Pillow renders that text onto the original template image. The system does **not** generate new images.
+Hybrid AI pipeline for company-advertising memes. It combines LLaMA 3, a curated library of existing meme templates, Stable Diffusion XL, BLIP-2 and OpenCV.
 
-## Generation flow
+## Active generation pipeline
 
-```
-Product brief
-    |
-    v
-Gemini product understanding
-    |  structured product context, audience, intent and use cases
-    v
-Python semantic template ranking
-    |  shortlist up to 3 candidates above the minimum confidence score
-    v
-Gemini hybrid template evaluation
-    |  select only from the Python-approved shortlist; may reject all
-    v
-Gemini joke generation
-    |  generate 3 complete, distinct jokes for the selected template
-    v
-Gemini joke evaluation
-    |  select one complete candidate; never mix slots between candidates
-    v
-Strict caption validation + Pillow visual fitting
-    |  character limits, measured wrapping, adaptive font sizing
-    v
-Original template image + final captions
-```
+1. **LLaMA 3** understands and expands the company/product brief into a structured meme concept.
+2. **Python semantic ranking** ranks existing meme templates by narrative intent and use-case fit. Weak matches are rejected instead of choosing randomly.
+3. **LLaMA 3** generates three complete caption candidates for the selected template and creates a supporting advertising-visual prompt for SDXL.
+4. **Stable Diffusion XL** generates a supporting advertising visual. It does not replace the selected meme template.
+5. **BLIP-2** performs image captioning and visual question answering on the SDXL visual.
+6. **OpenCV** overlays the selected caption on the original meme template and composes the SDXL visual as a companion panel.
 
-## AI provider configuration
+The final output contains an existing meme template plus an SDXL-generated supporting visual.
 
-Only Gemini is used for the active generation workflow. LLaMA settings may remain in older local environment files for compatibility, but they are not called by the meme generation route.
+## Model endpoint configuration
 
-Create a Google AI Studio API key and configure these values in the backend `.env` file or backend hosting environment:
+Copy `.env.example` to `.env` and configure:
 
 ```env
-GOOGLE_API_KEY=your_google_ai_studio_api_key
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_TIMEOUT=60
+LLAMA_API_URL=
+LLAMA_API_KEY=
+LLAMA_AUTH_TYPE=bearer
+LLAMA_TIMEOUT=90
+
+SDXL_API_URL=
+SDXL_API_KEY=
+SDXL_TIMEOUT=180
+
+BLIP2_API_URL=
+BLIP2_API_KEY=
+BLIP2_TIMEOUT=90
 ```
 
-Never place the API key in frontend environment variables. The readiness endpoint reports whether the key is configured; it does not make a live provider request.
+The LLaMA endpoint must accept `POST {"prompt":"..."}` and return generated JSON text in a `reply`, `generated_text`, `text`, or OpenAI-compatible `choices` field.
 
-Gemini retries transient HTTP 429/500/502/503/504 and connection/timeout failures up to three attempts with bounded exponential delays. Other provider failures return a clear API error. There is no local fake-generation fallback.
+### SDXL and BLIP-2 on Google Colab
 
-## Hybrid template selection
+A starter inference server is provided at `scripts/colab_hybrid_server.py`.
 
-The catalog at `meme_templates/template_intelligence.json` describes each template's purpose, narrative pattern, use cases, semantic cues, avoid conditions and text-slot meanings.
+In a Colab GPU runtime:
+1. Install the packages listed at the top of the script.
+2. Set `NGROK_AUTHTOKEN` as a Colab secret/environment variable.
+3. Run the script.
+4. Copy the printed public URL into the backend environment:
+   - `SDXL_API_URL=<public-url>/sdxl/generate`
+   - `BLIP2_API_URL=<public-url>/blip2/analyze`
 
-Python ranks templates using structured intent and use-case evidence. Only loaded templates with a score of at least 0.25 are shortlisted (maximum three). Gemini evaluates narrative fit within that shortlist and may reject all candidates. Gemini cannot invent or select an unlisted template.
+The server loads SDXL and BLIP-2 on demand and releases each model after its request to reduce GPU memory pressure. Use a GPU runtime. Colab tunnel URLs are temporary and must be updated after a runtime restart.
 
-If no candidate is suitable, the API returns HTTP 422. It never generates a replacement image or forces an unrelated template.
+Endpoint contracts:
+- SDXL request: `{"prompt":"...","negative_prompt":"..."}`; response: `{"image_base64":"..."}`, `{"image_url":"..."}`, or raw image bytes.
+- BLIP-2 request: `{"image_base64":"...","question":"..."}`; response: `{"caption":"...","answer":"..."}`.
 
-## Joke generation and selection
+## Template dataset
 
-Gemini generates three complete candidates for the selected template. Every candidate must contain every required slot and respect that slot's maximum character count. If the first response does not contain three valid candidates, Gemini receives one repair attempt. If it still cannot return three valid candidates, generation fails.
+The curated semantic catalog is `meme_templates/template_intelligence.json`. Stage ImgFlip575K under `datasets/raw/imgflip575k/`; do not commit the raw dataset or the full 575,948 example corpus. Start with its 100 clean template assets, metadata and selected caption examples. Each new template needs a verified image, slot definitions, coordinates, character limits and a semantic profile before being enabled for rendering.
 
-A separate evaluation selects one complete candidate based on product relevance, naturalness, humour/punchline strength, clarity and template fit. Slot text is never mixed between candidates. The API response includes the number of candidates evaluated and the selection reason.
+## Reliability rules
 
-## Caption validation and rendering
-
-Before rendering, the backend checks every required slot, its character limit and empty/ellipsis values. Pillow then measures actual text width, wraps whole words and reduces font size to fit a safe text region. Text is not silently truncated. If it cannot fit, rendering fails with a clear error.
-
-The template JSON currently provides anchor coordinates and character limits, but not precise per-slot bounding rectangles. The renderer therefore estimates safe text width from the number of slots. Template-specific bounding rectangles can be added later for more exact visual control.
+- No random template fallback.
+- No fabricated image or caption fallback when a model endpoint fails.
+- Template selection requires a confidence score of at least 0.25.
+- LLaMA must return exactly three complete caption candidates.
+- Every candidate must contain exactly the selected template's slot keys and stay within character limits.
+- Model, vision and rendering failures return explicit errors.
+- Readiness reports configuration only; it does not live-test remote model endpoints.
 
 ## Local setup
 
 ```bash
-python -m venv venv
-# Windows
-venv\\Scripts\\activate
-# macOS/Linux
-source venv/bin/activate
+python -m venv .venv
+# Windows: .venv\\Scripts\\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Run offline tests from the `backend` directory:
+Run offline tests from `backend/`:
 
 ```bash
 python -m pytest -q tests/
@@ -89,17 +88,8 @@ python -m pytest -q tests/
 
 ## API request
 
-```http
-POST /api/v1/generate-meme
-Content-Type: application/json
-```
-
 ```json
 {
-  "company_description": "HydroTrack sells smart reusable water bottles that track daily water intake and send reminders. Make a sarcastic, relatable meme for busy developers who forget to drink water."
+  "company_description": "A smart reusable water bottle that tracks hydration and reminds busy developers to drink water. Create a relatable, sarcastic advertisement."
 }
 ```
-
-The legacy `use_llama` request field is accepted temporarily for compatibility but ignored. Gemini is always used.
-
-A successful response includes `image_base64`, `caption`, `template_id`, `template_name`, `template_score`, `template_reason`, `ai_provider`, `joke_candidate_count` and `joke_selection_reason`.
