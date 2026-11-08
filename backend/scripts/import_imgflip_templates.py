@@ -28,6 +28,35 @@ def normalise_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
+def read_popular_templates(csv_path: Path) -> list[dict[str, str]]:
+    """Read the source CSV, accepting UTF-8 or Windows-1252 exports.
+
+    Some copies of this dataset contain typographic punctuation encoded as
+    Windows-1252 (for example byte 0x92) rather than valid UTF-8.
+    """
+    raw = csv_path.read_bytes()
+    try:
+        decoded = raw.decode("utf-8-sig")
+        encoding_used = "UTF-8"
+    except UnicodeDecodeError:
+        decoded = raw.decode("cp1252")
+        encoding_used = "Windows-1252"
+
+    rows = list(csv.DictReader(decoded.splitlines()))
+    if not rows:
+        raise ValueError(f"No template rows found in {csv_path}")
+
+    required_columns = {"ID", "Name"}
+    actual_columns = set(rows[0].keys())
+    if not required_columns.issubset(actual_columns):
+        raise ValueError(
+            f"Unexpected CSV columns in {csv_path}: {sorted(actual_columns)}"
+        )
+
+    print(f"Read {len(rows)} popular templates from {csv_path.name} ({encoding_used}).")
+    return rows
+
+
 def load_source() -> tuple[list[dict[str, str]], dict[str, dict[str, Any]], dict[str, int]]:
     csv_path = SOURCE_DIR / "popular_100_memes.csv"
     stats_path = SOURCE_DIR / "statistics.json"
@@ -39,14 +68,11 @@ def load_source() -> tuple[list[dict[str, str]], dict[str, dict[str, Any]], dict
                 f"Missing {required}. Follow backend/datasets/README.md to prepare the source dataset."
             )
 
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        popular = list(csv.DictReader(handle))
-
+    popular = read_popular_templates(csv_path)
     stats_data = json.loads(stats_path.read_text(encoding="utf-8"))
     stats = stats_data.get("memes", {})
 
     metadata_by_id: dict[str, dict[str, Any]] = {}
-    metadata_by_name: dict[str, dict[str, Any]] = {}
     for metadata_path in templates_dir.glob("*.json"):
         try:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -56,9 +82,8 @@ def load_source() -> tuple[list[dict[str, str]], dict[str, dict[str, Any]], dict
         template_id = str(metadata.get("template_id", "")).strip()
         if template_id:
             metadata_by_id[template_id] = metadata
-        metadata_by_name[normalise_name(metadata_path.stem)] = metadata
 
-    return popular, metadata_by_id | {}, stats
+    return popular, metadata_by_id, stats
 
 
 def main() -> None:
@@ -73,12 +98,16 @@ def main() -> None:
 
     # Build a metadata filename index to support entries with missing IDs.
     metadata_by_name: dict[str, tuple[Path, dict[str, Any]]] = {}
+    metadata_path_by_id: dict[str, Path] = {}
     for metadata_path in templates_dir.glob("*.json"):
         try:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         metadata_by_name[normalise_name(metadata_path.stem)] = (metadata_path, metadata)
+        template_id = str(metadata.get("template_id", "")).strip()
+        if template_id:
+            metadata_path_by_id[template_id] = metadata_path
 
     entries: list[dict[str, Any]] = []
     missing: list[str] = []
@@ -86,20 +115,10 @@ def main() -> None:
     for row in popular:
         template_id = str(row.get("ID", "")).strip()
         display_name = str(row.get("Name", "")).strip()
-        aliases_csv = str(row.get("Alternate Names", row.get("Alternate Names", ""))).strip()
+        aliases_csv = str(row.get("Alternate Names", "")).strip()
 
         metadata = metadata_by_id.get(template_id)
-        metadata_path: Path | None = None
-        if metadata:
-            for candidate in templates_dir.glob("*.json"):
-                try:
-                    candidate_data = json.loads(candidate.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if str(candidate_data.get("template_id", "")).strip() == template_id:
-                    metadata_path = candidate
-                    break
-
+        metadata_path = metadata_path_by_id.get(template_id)
         if not metadata:
             matched = metadata_by_name.get(normalise_name(display_name))
             if matched:
@@ -111,7 +130,10 @@ def main() -> None:
 
         image_name = metadata_path.stem
         image_path = next(
-            (p for p in source_images.glob(f"{image_name}.*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}),
+            (
+                p for p in source_images.glob(f"{image_name}.*")
+                if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+            ),
             None,
         )
         if image_path is None:
@@ -171,7 +193,10 @@ def main() -> None:
         "missing": missing,
     }
     manifest_path = OUTPUT_DIR / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
     print(f"Imported {len(entries)} of {len(popular)} popular templates.")
     print(f"Manifest: {manifest_path}")
