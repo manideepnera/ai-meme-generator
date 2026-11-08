@@ -1,8 +1,4 @@
-"""LLaMA 3 helpers for template-aware caption and SDXL prompt generation.
-
-Uses the same configured LLaMA endpoint as LlamaService, but provides the
-second-stage response contract needed by the hybrid workflow.
-"""
+"""LLaMA 3 helpers for template-aware caption and SDXL prompt generation."""
 import json
 import logging
 import re
@@ -61,7 +57,7 @@ class HybridLlamaService:
         if isinstance(raw, dict):
             return raw
         text = str(raw).strip()
-        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text, flags=re.I)
+        text = re.sub(r"^\s*\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$", "", text, flags=re.I)
         try:
             result = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -86,7 +82,7 @@ class HybridLlamaService:
         slot_meanings: dict[str, str],
         slot_limits: dict[str, int],
     ) -> dict[str, Any]:
-        """Generate multiple complete slot sets and an SDXL visual prompt."""
+        """Generate multiple complete slot sets and an SDXL advertising prompt."""
         schema = {
             "candidates": [
                 {"caption": "short summary", "template_slots": {key: "caption" for key in slot_limits}}
@@ -98,7 +94,8 @@ class HybridLlamaService:
         prompt = f"""You are LLaMA 3 in a multi-stage AI advertising meme system.
 Return ONLY valid JSON matching this shape: {json.dumps(schema)}
 Generate exactly 3 complete, distinct joke candidates. Never mix slots between candidates.
-Company/product brief: {company_description}
+Structured advertising brief:
+{company_description}
 Selected existing template: {template_name} ({template_id})
 Template purpose: {template_purpose}
 Narrative pattern: {narrative_pattern}
@@ -107,9 +104,11 @@ Maximum characters per slot: {json.dumps(slot_limits)}
 Rules:
 - Every candidate must contain exactly these slot keys: {list(slot_limits)}
 - Keep every slot within its character limit.
+- Use the company, product, advertising objective and audience as distinct context.
 - Make jokes relevant to the actual product and target audience; do not invent product claims.
+- Make the joke support the advertising objective without sounding like generic ad copy.
 - Respect the selected template's narrative structure.
-- image_prompt must describe a complementary advertising visual, not recreate the meme template or include text.
+- image_prompt must describe a compelling advertising visual for the product and objective, not recreate the meme template or include text.
 - negative_prompt should prevent text, watermarks, logos, distorted products and malformed anatomy.
 - selection_reason should briefly explain why the first candidate is strongest.
 """
