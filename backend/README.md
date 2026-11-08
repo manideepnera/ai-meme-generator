@@ -40,13 +40,13 @@ A starter inference server is provided at `scripts/colab_hybrid_server.py`.
 
 In a Colab GPU runtime:
 1. Install the packages listed at the top of the script.
-2. Set `NGROK_AUTHTOKEN` as a Colab secret/environment variable.
+2. Set `NGROK_AUTHTOKEN` and a strong `MODEL_API_KEY` as Colab secrets/environment variables.
 3. Run the script.
 4. Copy the printed public URL into the backend environment:
    - `SDXL_API_URL=<public-url>/sdxl/generate`
    - `BLIP2_API_URL=<public-url>/blip2/analyze`
 
-The server loads SDXL and BLIP-2 on demand and releases each model after its request to reduce GPU memory pressure. Use a GPU runtime. Colab tunnel URLs are temporary and must be updated after a runtime restart.
+The server requires Bearer authentication using `MODEL_API_KEY`, loads SDXL and BLIP-2 on demand, and releases each model after its request to reduce GPU memory pressure. Set the same token as `SDXL_API_KEY` and `BLIP2_API_KEY` in backend `.env`. Use a GPU runtime. Colab tunnel URLs are temporary and must be updated after a runtime restart.
 
 Endpoint contracts:
 - SDXL request: `{"prompt":"...","negative_prompt":"..."}`; response: `{"image_base64":"..."}`, `{"image_url":"..."}`, or raw image bytes.
