@@ -131,7 +131,7 @@ async def generate_meme(
 
     # 6. Existing meme template captioning remains deterministic; OpenCV adds the SDXL panel.
     try:
-        rendered_template = template_service.render_template(template, slot_values)
+        rendered_template = OpenCVRenderer.render_template_captions(template, slot_values)
         composed = OpenCVRenderer.compose(rendered_template, generated_visual)
         image_base64 = template_service.image_to_base64(composed)
     except Exception as exc:
