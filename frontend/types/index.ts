@@ -1,5 +1,8 @@
 export interface MemeGenerationRequest {
-    companyDescription: string;
+    company: string;
+    product: string;
+    advertising_objective: string;
+    audience: string;
 }
 
 export interface BackendMemeResponse {
