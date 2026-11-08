@@ -1,254 +1,97 @@
 """
 Meme generation schemas.
-
-This module contains all Pydantic models for request/response validation
-in the meme generation pipeline.
 """
-
 from enum import Enum
-from typing import Optional, Dict, List
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Dict
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TextPosition(str, Enum):
-    """Valid positions for meme caption text."""
     TOP = "top"
     BOTTOM = "bottom"
 
 
-# =============================================================================
-# FRONTEND REQUEST/RESPONSE SCHEMAS
-# =============================================================================
-
 class MemeGenerateRequest(BaseModel):
-    """
-    Request schema for meme generation from frontend.
-    
-    The frontend sends a company/product description, and the backend
-    orchestrates the meme generation process.
-    """
-    
-    use_llama: Optional[bool] = Field(
-        None,
-        description="Deprecated compatibility field; the hybrid pipeline always uses LLaMA 3."
-    )
+    """Structured advertising brief. Legacy company_description remains accepted for API compatibility."""
+    use_llama: Optional[bool] = Field(None, description="Deprecated compatibility field; the hybrid pipeline always uses LLaMA 3.")
+    company: Optional[str] = Field(None, min_length=2, max_length=160, description="Company or brand name")
+    product: Optional[str] = Field(None, min_length=3, max_length=600, description="Product or service being advertised")
+    advertising_objective: Optional[str] = Field(None, min_length=3, max_length=500, description="Advertising objective or campaign goal")
+    audience: Optional[str] = Field(None, min_length=2, max_length=300, description="Intended target audience")
+    company_description: Optional[str] = Field(None, min_length=10, max_length=2000, description="Legacy combined brief; retained for older API clients")
 
-    company_description: str = Field(
-        ...,
-        min_length=10,
-        max_length=2000,
-        description="Description of the company or product to create a meme for",
-        examples=["A tech startup that makes AI-powered coffee machines that learn your taste preferences"]
-    )
-    
-    @field_validator("company_description")
-    @classmethod
-    def validate_description(cls, v: str) -> str:
-        """Validate and clean the company description."""
-        # Strip whitespace
-        v = v.strip()
-        
-        # Check for empty string after stripping
-        if not v:
-            raise ValueError("Company description cannot be empty")
-        
-        return v
+    @model_validator(mode="after")
+    def validate_brief(self):
+        values = [self.company, self.product, self.advertising_objective, self.audience]
+        if all(value and value.strip() for value in values):
+            for field in ("company", "product", "advertising_objective", "audience"):
+                setattr(self, field, getattr(self, field).strip())
+            return self
+        if self.company_description and self.company_description.strip():
+            self.company_description = self.company_description.strip()
+            return self
+        raise ValueError("Provide all four fields: company, product, advertising_objective and audience.")
+
+    def to_brief(self) -> str:
+        """Format the structured fields into a labelled prompt for LLaMA."""
+        if self.company and self.product and self.advertising_objective and self.audience:
+            return (
+                f"Company: {self.company}\n"
+                f"Product: {self.product}\n"
+                f"Advertising objective: {self.advertising_objective}\n"
+                f"Target audience: {self.audience}"
+            )
+        return self.company_description or ""
 
 
 class MemeGenerateResponse(BaseModel):
-    """
-    Response schema for successful meme generation.
-    
-    Returns the final meme image (as URL or base64) along with metadata.
-    """
-    
-    # The final meme image - either a URL or base64 encoded image
-    # This comes from Google Colab after image generation
-    image_url: Optional[str] = Field(
-        None,
-        description="URL of the generated meme image (if Colab returns a URL)"
-    )
-    
-    image_base64: Optional[str] = Field(
-        None,
-        description="Base64 encoded meme image (if Colab returns base64)"
-    )
-    
-    # Metadata from LLaMA response
-    caption: str = Field(
-        ...,
-        description="The meme caption text (in English)"
-    )
-    
-    text_position: TextPosition = Field(
-        ...,
-        description="Position of the caption on the meme (top or bottom)"
-    )
-    
-    # Optional: Include the image prompt for debugging/transparency
-    image_prompt: Optional[str] = Field(
-        None,
-        description="The image generation prompt used (for debugging)"
-    )
+    image_url: Optional[str] = None
+    image_base64: Optional[str] = None
+    caption: str
+    text_position: TextPosition
+    image_prompt: Optional[str] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    template_score: Optional[float] = None
+    template_reason: Optional[str] = None
+    ai_provider: Optional[str] = None
+    joke_candidate_count: Optional[int] = None
+    joke_selection_reason: Optional[str] = None
+    vision_caption: Optional[str] = None
+    vision_answer: Optional[str] = None
 
-    template_id: Optional[str] = Field(
-        None,
-        description="Identifier of the existing meme template selected"
-    )
-
-    template_name: Optional[str] = Field(
-        None,
-        description="Human-readable name of the selected meme template"
-    )
-
-    template_score: Optional[float] = Field(
-        None,
-        description="Semantic matching score for the selected template"
-    )
-
-    template_reason: Optional[str] = Field(
-        None,
-        description="Short explanation of why the template was selected"
-    )
-
-    ai_provider: Optional[str] = Field(
-        None,
-        description="Pipeline technologies used to generate the meme."
-    )
-
-    joke_candidate_count: Optional[int] = Field(
-        None, description="Number of complete joke candidates evaluated"
-    )
-
-    joke_selection_reason: Optional[str] = Field(
-        None, description="Why the selected joke candidate was preferred"
-    )
-
-    vision_caption: Optional[str] = Field(
-        None, description="BLIP-2 caption of the SDXL-generated supporting visual"
-    )
-
-    vision_answer: Optional[str] = Field(
-        None, description="BLIP-2 visual-question-answering result"
-    )
-    
     @field_validator("image_url", "image_base64")
     @classmethod
     def validate_image_provided(cls, v, info):
-        """Ensure at least one image format is provided."""
-        # This validation happens at the field level
-        # The model-level validation ensures at least one is present
         return v
-    
+
     def model_post_init(self, __context):
-        """Validate that at least one image format is provided."""
         if not self.image_url and not self.image_base64:
-            # This is acceptable during construction, but the route should ensure
-            # at least one is populated before returning
             pass
 
 
-# =============================================================================
-# LLAMA API SCHEMAS (STRICT FORMAT - LOCKED)
-# =============================================================================
-
 class LlamaOutput(BaseModel):
-    """
-    STRICT schema for LLaMA API output.
-    
-    LLaMA MUST return JSON ONLY in this exact format:
-    {
-        "image_prompt": "string",
-        "negative_prompt": "string",
-        "caption": "string (English only)",
-        "text_position": "top | bottom"
-    }
-    
-    No markdown.
-    No explanations.
-    No extra keys.
-    """
-    
-    image_prompt: str = Field(
-        ...,
-        min_length=1,
-        description="Detailed prompt for image generation"
-    )
-    
-    negative_prompt: str = Field(
-        ...,
-        description="Negative prompt to avoid unwanted elements in image"
-    )
-    
-    caption: str = Field(
-        ...,
-        min_length=1,
-        description="Meme caption text (English only)"
-    )
-    
-    text_position: TextPosition = Field(
-        ...,
-        description="Position of text on the meme (top or bottom)"
-    )
+    image_prompt: str = Field(..., min_length=1)
+    negative_prompt: str
+    caption: str = Field(..., min_length=1)
+    text_position: TextPosition
+    keywords: Optional[list[str]] = Field(default_factory=list)
+    use_cases: Optional[list[str]] = Field(default_factory=list)
+    intent: Optional[str] = None
+    template_slots: Optional[Dict[str, str]] = Field(default_factory=dict)
 
-    # Optional fields for template matching
-    keywords: Optional[list[str]] = Field(
-        default_factory=list,
-        description="Keywords extracted from the concept"
-    )
-    use_cases: Optional[list[str]] = Field(
-        default_factory=list,
-        description="Relevant meme categories or use cases"
-    )
-    intent: Optional[str] = Field(
-        None,
-        description="The primary intent of the meme (e.g., comparison, irony)"
-    )
-    template_slots: Optional[Dict[str, str]] = Field(
-        default_factory=dict,
-        description="Optional values for template slots if a template is matched"
-    )
-    
     class Config:
-        # Strict mode: reject extra fields
         extra = "forbid"
 
 
-# =============================================================================
-# GOOGLE COLAB API SCHEMAS
-# =============================================================================
-
 class ColabRequest(BaseModel):
-    """
-    Request schema for Google Colab meme generation endpoint.
-    
-    This is the payload sent to the Colab endpoint containing
-    the LLaMA-generated meme concept.
-    """
-    
-    image_prompt: str = Field(
-        ...,
-        description="Detailed prompt for image generation"
-    )
-    
-    negative_prompt: str = Field(
-        ...,
-        description="Negative prompt to avoid unwanted elements"
-    )
-    
-    caption: str = Field(
-        ...,
-        description="Caption text to overlay on the meme"
-    )
-    
-    text_position: str = Field(
-        ...,
-        description="Position of caption (top or bottom)"
-    )
-    
+    image_prompt: str
+    negative_prompt: str
+    caption: str
+    text_position: str
+
     @classmethod
     def from_llama_output(cls, llama_output: LlamaOutput) -> "ColabRequest":
-        """Create a ColabRequest from LlamaOutput."""
         return cls(
             image_prompt=llama_output.image_prompt,
             negative_prompt=llama_output.negative_prompt,
@@ -258,50 +101,17 @@ class ColabRequest(BaseModel):
 
 
 class ColabResponse(BaseModel):
-    """
-    Response schema from Google Colab meme generation endpoint.
-    
-    Colab may return the final meme as either:
-    - A URL to the hosted image
-    - A base64 encoded image string
-    
-    At least one must be provided.
-    """
-    
-    image_url: Optional[str] = Field(
-        None,
-        description="URL of the generated meme image"
-    )
-    
-    image_base64: Optional[str] = Field(
-        None,
-        description="Base64 encoded meme image"
-    )
-    
-    # Optional success/status field that Colab might include
-    success: Optional[bool] = Field(
-        None,
-        description="Whether generation was successful"
-    )
-    
-    error: Optional[str] = Field(
-        None,
-        description="Error message if generation failed"
-    )
-    
+    image_url: Optional[str] = None
+    image_base64: Optional[str] = None
+    success: Optional[bool] = None
+    error: Optional[str] = None
+
     @property
     def has_image(self) -> bool:
-        """Check if a valid image was returned."""
         return bool(self.image_url or self.image_base64)
 
 
-# =============================================================================
-# ERROR RESPONSE SCHEMA
-# =============================================================================
-
 class ErrorResponse(BaseModel):
-    """Standard error response schema."""
-    
-    error: str = Field(..., description="Error type/code")
-    message: str = Field(..., description="Human-readable error message")
-    details: Optional[dict] = Field(None, description="Additional error details")
+    error: str
+    message: str
+    details: Optional[dict] = None
