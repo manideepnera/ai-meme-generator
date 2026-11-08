@@ -38,10 +38,10 @@ def get_vision_service() -> HybridVisionService:
     },
     summary="Generate a hybrid AI advertising meme",
     description=(
-        "LLaMA 3 expands the brief and generates template-aware captions and an SDXL prompt. "
-        "Python ranks existing Imgflip templates. SDXL generates a companion advertising visual, "
-        "BLIP-2 captions and answers a visual question about it, and OpenCV composes the visual "
-        "beside the selected original meme template."
+        "Accepts Company, Product, Advertising objective and Audience as separate fields. "
+        "LLaMA 3 expands the brief and generates meme concepts. Python semantically matches "
+        "an existing meme template. SDXL generates an advertising visual, BLIP-2 analyses it, "
+        "and OpenCV renders the final composition."
     ),
 )
 async def generate_meme(
@@ -51,33 +51,27 @@ async def generate_meme(
     vision: Annotated[HybridVisionService, Depends(get_vision_service)],
     template_service: Annotated[TemplateService, Depends(get_template_service)],
 ) -> MemeGenerateResponse:
-    logger.info("Received hybrid meme request. Description length: %s", len(request.company_description))
+    brief = request.to_brief()
+    logger.info("Received structured advertising brief. Length: %s", len(brief))
 
-    # 1. LLaMA 3 understands the product and expands it into a meme concept.
+    # 1. LLaMA 3 expands the four-field advertising brief into a meme concept.
     try:
-        concept = await llama_service.generate_meme_concept(request.company_description)
+        concept = await llama_service.generate_meme_concept(brief)
     except Exception as exc:
         logger.exception("LLaMA 3 concept generation failed")
         raise HTTPException(status_code=502, detail={
             "error": "llama_concept_generation_failed",
-            "message": "LLaMA 3 could not understand the product brief. Check LLAMA_API_URL and retry.",
+            "message": "LLaMA 3 could not understand the advertising brief. Check LLAMA_API_URL and retry.",
         }) from exc
 
     # 2. Require both a minimum score and a clear margin over the runner-up.
     ranked = template_service.rank_templates(concept)
-    shortlist = [
-        item for item in ranked
-        if item.get("score", 0) >= 0.25 and item.get("template_id") in template_service.templates
-    ][:3]
     intelligence = getattr(template_service, "intelligence", None)
     selected_match = (
         intelligence.select(concept, minimum_score=0.25, minimum_margin=0.04)
         if intelligence is not None else None
     )
-    if (
-        not selected_match
-        or selected_match.get("template_id") not in template_service.templates
-    ):
+    if not selected_match or selected_match.get("template_id") not in template_service.templates:
         raise HTTPException(status_code=422, detail={
             "error": "no_suitable_template",
             "message": "No existing meme template matches this concept confidently, or the top matches are too close to distinguish.",
@@ -89,10 +83,10 @@ async def generate_meme(
     profile = template_service.get_template_profile(template.id)
     slot_limits = {slot.key: slot.max_chars for slot in template.text_slots}
 
-    # 3. LLaMA 3 generates three complete captions and a supporting SDXL visual prompt.
+    # 3. LLaMA 3 creates three template-aware caption candidates and the SDXL visual prompt.
     try:
         generated = await hybrid_llama.generate_template_content(
-            company_description=request.company_description,
+            company_description=brief,
             template_id=template.id,
             template_name=template.name,
             template_purpose=profile.get("purpose", template.description),
@@ -110,7 +104,7 @@ async def generate_meme(
     selected_joke = generated["candidates"][0]
     slot_values = selected_joke["template_slots"]
 
-    # 4. SDXL generates a companion advertising visual (not a replacement template).
+    # 4. SDXL generates the advertising visual.
     try:
         generated_visual = await vision.generate_sdxl_image(
             generated["image_prompt"], generated["negative_prompt"]
@@ -122,11 +116,11 @@ async def generate_meme(
             "message": str(exc),
         }) from exc
 
-    # 5. BLIP-2 performs image captioning and visual question answering on the SDXL image.
+    # 5. BLIP-2 performs image captioning and visual question answering.
     try:
         vision_result = await vision.inspect_with_blip2(
             generated_visual,
-            "Describe the main subject and explain whether this visual is relevant to the product advertisement.",
+            "Describe the main subject and explain whether this visual is relevant to the product and advertising objective.",
         )
     except VisionServiceError as exc:
         logger.exception("BLIP-2 image understanding failed")
@@ -135,7 +129,7 @@ async def generate_meme(
             "message": str(exc),
         }) from exc
 
-    # 6. OpenCV overlays captions on the original template and adds the SDXL companion panel.
+    # 6. OpenCV overlays the selected captions and composes the final output.
     try:
         rendered_template = OpenCVRenderer.render_template_captions(template, slot_values)
         composed = OpenCVRenderer.compose(rendered_template, generated_visual)
@@ -144,7 +138,7 @@ async def generate_meme(
         logger.exception("OpenCV meme composition failed")
         raise HTTPException(status_code=502, detail={
             "error": "opencv_rendering_failed",
-            "message": "The generated visual and existing meme template could not be composed.",
+            "message": "The generated visual and selected meme template could not be composed.",
         }) from exc
 
     return MemeGenerateResponse(
