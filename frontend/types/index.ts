@@ -11,7 +11,7 @@ export interface BackendMemeResponse {
     template_name?: string;
     template_score?: number;
     template_reason?: string;
-    ai_provider?: 'gemini';
+    ai_provider?: string;
     joke_candidate_count?: number;
     joke_selection_reason?: string;
 }
@@ -23,7 +23,7 @@ export interface MemeGenerationResponse {
     textPosition: 'top' | 'bottom';
     templateName?: string;
     templateReason?: string;
-    aiProvider?: 'gemini';
+    aiProvider?: string;
     jokeCandidateCount?: number;
     jokeSelectionReason?: string;
 }
