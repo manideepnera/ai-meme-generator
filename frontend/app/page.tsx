@@ -8,6 +8,7 @@ import { LoadingState } from './components/LoadingState';
 import { MemeResult } from './components/MemeResult';
 import { ErrorState } from './components/ErrorState';
 import {
+  MemeGenerationRequest,
   MemeGenerationResponse,
   BackendMemeResponse,
   LoadingState as LoadingStateType,
@@ -27,9 +28,9 @@ export default function Home() {
     progress: 0,
   });
   const [result, setResult] = useState<MemeGenerationResponse | null>(null);
-  const [currentDescription, setCurrentDescription] = useState('');
+  const [currentBrief, setCurrentBrief] = useState<MemeGenerationRequest | null>(null);
   const [error, setError] = useState<ErrorInfo | null>(null);
-  const [hybridConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [hybridConfigured, setHybridConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,32 +39,26 @@ export default function Home() {
         const response = await fetch(`${API_BASE_URL}/api/v1/health/ready`);
         if (!response.ok) return;
         const data = await response.json();
-        if (!cancelled) {
-          setGeminiConfigured(Boolean(data.configuration?.gemini_api_configured));
-        }
+        if (!cancelled) setHybridConfigured(data.status === 'ready');
       } catch {
-        if (!cancelled) setGeminiConfigured(null);
+        if (!cancelled) setHybridConfigured(null);
       }
     };
     checkReadiness();
     return () => { cancelled = true; };
   }, []);
 
-  const handleGenerate = async (description: string) => {
-    setCurrentDescription(description);
+  const handleGenerate = async (brief: MemeGenerationRequest) => {
+    setCurrentBrief(brief);
     setResult(null);
     setError(null);
-    setLoadingState({
-      isLoading: true,
-      currentStep: 'understanding',
-      progress: 15,
-    });
+    setLoadingState({ isLoading: true, currentStep: 'understanding', progress: 15 });
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/generate-meme`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_description: description }),
+        body: JSON.stringify(brief),
       });
 
       const responseData = await response.json().catch(() => ({}));
@@ -105,7 +100,7 @@ export default function Home() {
   };
 
   const handleRetry = () => {
-    if (currentDescription) void handleGenerate(currentDescription);
+    if (currentBrief) void handleGenerate(currentBrief);
   };
 
   return (
@@ -118,7 +113,7 @@ export default function Home() {
       <div className={styles.content}>
         <Header />
         <CompanyInputForm
-          onGenerate={(description) => void handleGenerate(description)}
+          onGenerate={(brief) => void handleGenerate(brief)}
           isLoading={loadingState.isLoading}
           hybridConfigured={hybridConfigured}
         />
@@ -126,14 +121,14 @@ export default function Home() {
           <LoadingState currentStep={loadingState.currentStep} progress={loadingState.progress} />
         )}
         {result && !loadingState.isLoading && (
-          <MemeResult result={result} onRegenerate={() => void handleGenerate(currentDescription)} />
+          <MemeResult result={result} onRegenerate={() => currentBrief && void handleGenerate(currentBrief)} />
         )}
         {error && !loadingState.isLoading && (
           <ErrorState message={error.message} details={error.details} onRetry={handleRetry} />
         )}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            LLaMA 3 • SDXL • BLIP-2 • OpenCV • Existing meme templates
+            LLaMA 3 • Template matching • SDXL • BLIP-2 • OpenCV
           </p>
         </footer>
       </div>
