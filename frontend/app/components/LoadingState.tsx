@@ -11,9 +11,9 @@ interface LoadingStateProps {
 
 const stepMessages: Record<GenerationStep, string> = {
     idle: '',
-    understanding: 'Creating meme concept...',
-    'generating-image': 'Finding the best existing meme template...',
-    'adding-caption': 'Finalizing meme...',
+    understanding: 'LLaMA 3 is understanding your product...',
+    'generating-image': 'Selecting a meme template and generating the SDXL visual...',
+    'adding-caption': 'BLIP-2 is analysing the visual; OpenCV is composing the meme...',
     complete: '✅ Complete!',
     error: '❌ Something went wrong',
 };
