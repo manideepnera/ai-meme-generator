@@ -29,7 +29,7 @@ export default function Home() {
   const [result, setResult] = useState<MemeGenerationResponse | null>(null);
   const [currentDescription, setCurrentDescription] = useState('');
   const [error, setError] = useState<ErrorInfo | null>(null);
-  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [hybridConfigured, setGeminiConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +120,7 @@ export default function Home() {
         <CompanyInputForm
           onGenerate={(description) => void handleGenerate(description)}
           isLoading={loadingState.isLoading}
-          geminiConfigured={geminiConfigured}
+          hybridConfigured={hybridConfigured}
         />
         {loadingState.isLoading && (
           <LoadingState currentStep={loadingState.currentStep} progress={loadingState.progress} />
@@ -133,7 +133,7 @@ export default function Home() {
         )}
         <footer className={styles.footer}>
           <p className={styles.footerText}>
-            Existing meme templates • Google Gemini • 3 joke candidates • Hybrid quality checks
+            LLaMA 3 • SDXL • BLIP-2 • OpenCV • Existing meme templates
           </p>
         </footer>
       </div>
