@@ -111,3 +111,25 @@ async def test_api_does_not_choose_top_ranked_template_when_match_is_ambiguous()
 
     assert error.value.status_code == 422
     assert error.value.detail["error"] == "no_suitable_template"
+
+
+def test_structured_advertising_brief_is_formatted_for_llama():
+    request = MemeGenerateRequest(
+        company="HydroTrack",
+        product="A smart bottle that tracks hydration",
+        advertising_objective="Increase awareness and encourage daily hydration",
+        audience="Busy students and developers",
+    )
+
+    brief = request.to_brief()
+    assert "Company: HydroTrack" in brief
+    assert "Product: A smart bottle that tracks hydration" in brief
+    assert "Advertising objective: Increase awareness and encourage daily hydration" in brief
+    assert "Target audience: Busy students and developers" in brief
+
+
+def test_legacy_combined_brief_remains_supported():
+    request = MemeGenerateRequest(
+        company_description="A reusable bottle for busy students who forget to hydrate"
+    )
+    assert request.to_brief() == request.company_description
