@@ -63,24 +63,30 @@ async def generate_meme(
             "message": "LLaMA 3 could not understand the product brief. Check LLAMA_API_URL and retry.",
         }) from exc
 
-    # 2. Python semantic ranking proposes only real, locally available templates.
+    # 2. Require both a minimum score and a clear margin over the runner-up.
     ranked = template_service.rank_templates(concept)
     shortlist = [
         item for item in ranked
         if item.get("score", 0) >= 0.25 and item.get("template_id") in template_service.templates
     ][:3]
-    if not shortlist:
+    intelligence = getattr(template_service, "intelligence", None)
+    selected_match = (
+        intelligence.select(concept, minimum_score=0.25, minimum_margin=0.04)
+        if intelligence is not None else None
+    )
+    if (
+        not selected_match
+        or selected_match.get("template_id") not in template_service.templates
+    ):
         raise HTTPException(status_code=422, detail={
             "error": "no_suitable_template",
-            "message": "No existing meme template matches this concept confidently.",
+            "message": "No existing meme template matches this concept confidently, or the top matches are too close to distinguish.",
             "details": {"template_candidates": ranked[:3]},
         })
 
-    # LLaMA's first-stage semantic intent is used with the Python top-ranked candidate.
-    selected_id = shortlist[0]["template_id"]
+    selected_id = selected_match["template_id"]
     template = template_service.templates[selected_id]
     profile = template_service.get_template_profile(template.id)
-    slot_keys = [slot.key for slot in template.text_slots]
     slot_limits = {slot.key: slot.max_chars for slot in template.text_slots}
 
     # 3. LLaMA 3 generates three complete captions and a supporting SDXL visual prompt.
@@ -129,7 +135,7 @@ async def generate_meme(
             "message": str(exc),
         }) from exc
 
-    # 6. Existing meme template captioning remains deterministic; OpenCV adds the SDXL panel.
+    # 6. OpenCV overlays captions on the original template and adds the SDXL companion panel.
     try:
         rendered_template = OpenCVRenderer.render_template_captions(template, slot_values)
         composed = OpenCVRenderer.compose(rendered_template, generated_visual)
@@ -141,7 +147,6 @@ async def generate_meme(
             "message": "The generated visual and existing meme template could not be composed.",
         }) from exc
 
-    selected_match = shortlist[0]
     return MemeGenerateResponse(
         image_url=None,
         image_base64=image_base64,
