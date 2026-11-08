@@ -89,7 +89,7 @@ class HybridLlamaService:
         """Generate multiple complete slot sets and an SDXL visual prompt."""
         schema = {
             "candidates": [
-                {"caption": "short summary", "template_slots": {key: "caption"}}
+                {"caption": "short summary", "template_slots": {key: "caption" for key in slot_limits}}
             ],
             "image_prompt": "visual advertising scene prompt",
             "negative_prompt": "unwanted visual elements",
