@@ -30,7 +30,7 @@ class MemeGenerateRequest(BaseModel):
     
     use_llama: Optional[bool] = Field(
         None,
-        description="Deprecated compatibility field. Generation always uses Gemini."
+        description="Deprecated compatibility field; the hybrid pipeline always uses LLaMA 3."
     )
 
     company_description: str = Field(
@@ -113,7 +113,7 @@ class MemeGenerateResponse(BaseModel):
 
     ai_provider: Optional[str] = Field(
         None,
-        description="AI provider used to generate the meme: gemini"
+        description="Pipeline technologies used to generate the meme."
     )
 
     joke_candidate_count: Optional[int] = Field(
@@ -122,6 +122,14 @@ class MemeGenerateResponse(BaseModel):
 
     joke_selection_reason: Optional[str] = Field(
         None, description="Why the selected joke candidate was preferred"
+    )
+
+    vision_caption: Optional[str] = Field(
+        None, description="BLIP-2 caption of the SDXL-generated supporting visual"
+    )
+
+    vision_answer: Optional[str] = Field(
+        None, description="BLIP-2 visual-question-answering result"
     )
     
     @field_validator("image_url", "image_base64")
