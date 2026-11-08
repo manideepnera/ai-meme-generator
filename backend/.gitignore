@@ -50,3 +50,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Downloaded datasets and generated model assets
+datasets/raw/
+datasets/processed/
