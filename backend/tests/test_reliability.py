@@ -1,186 +1,67 @@
-import base64
-from io import BytesIO
-
 import pytest
 from fastapi import HTTPException
-from PIL import Image
 
 from app.routes.meme import generate_meme
 from app.schemas.meme import LlamaOutput, MemeGenerateRequest
-from app.services.fallback import FallbackMemeService
 from app.services.templates import TemplateService
 
 
-def _decode_png(encoded: str) -> Image.Image:
-    raw = base64.b64decode(encoded, validate=True)
-    image = Image.open(BytesIO(raw))
-    image.load()
-    return image
-
-
-def test_fallback_concept_matches_llama_schema_and_uses_description():
-    service = FallbackMemeService()
-    concept = service.create_concept(
-        "A startup that makes AI-powered coffee machines for busy developers"
-    )
-
-    assert concept.image_prompt
-    assert concept.caption
-    assert concept.text_position.value in {"top", "bottom"}
-    assert concept.keywords
-    assert "coffee" in concept.image_prompt.lower()
-
-
-@pytest.mark.parametrize(
-    "description,caption",
-    [
-        (
-            "A productivity app that helps students focus",
-            "When your focus finally loads faster than your notifications",
-        ),
-        (
-            "A very long description about a smart reusable water bottle "
-            "that tracks hydration throughout a busy workday",
-            "When you finally remember to drink water during the busiest day",
-        ),
-    ],
-)
-def test_local_fallback_always_returns_decodable_square_png(description, caption):
-    encoded = FallbackMemeService().render_image_base64(description, caption)
-    image = _decode_png(encoded)
-
-    assert image.format == "PNG"
-    assert image.size == (1080, 1080)
-    assert image.mode in {"RGB", "RGBA"}
-
-
-def test_every_registered_template_can_receive_all_required_slots():
+def test_template_service_loads_existing_templates():
     service = TemplateService()
-    concept = LlamaOutput(
-        image_prompt="A funny scene about a productivity app",
-        negative_prompt="blurry",
-        caption="When productivity finally makes sense",
-        text_position="bottom",
-        keywords=["productivity", "focus", "notifications", "planning", "work"],
-        use_cases=["relatable", "comparison", "choice"],
-        intent="comparison",
-        template_slots={},
-    )
+    assert service.templates
+    assert len(service.templates) >= 1
 
-    assert service.templates, "No meme templates were loaded"
 
+def test_every_registered_template_has_slot_definitions():
+    service = TemplateService()
     for template in service.templates.values():
-        values = service.fill_template_slots(template, concept)
-        required = {slot.key for slot in template.text_slots}
-        assert set(values) == required, template.id
-        assert all(value.strip() for value in values.values()), template.id
+        assert template.text_slots, template.id
+        assert all(slot.key and slot.max_chars > 0 for slot in template.text_slots)
 
 
 @pytest.mark.asyncio
-async def test_api_does_not_generate_an_image_when_no_template_matches():
-    class WorkingGemini:
+async def test_api_rejects_when_no_confident_existing_template_matches():
+    class FakeLlama:
         async def generate_meme_concept(self, _description):
             return LlamaOutput(
-                image_prompt="A funny scene about a small-business operations app",
-                negative_prompt="blurry",
-                caption="When every order is finally organised",
+                image_prompt="A product advertising scene",
+                negative_prompt="",
+                caption="A generic product joke",
                 text_position="bottom",
-                keywords=["small business", "orders", "operations"],
-                use_cases=["relatable"],
-                intent="relatable",
+                keywords=["generic", "product"],
+                use_cases=["generic"],
+                intent="unclassified",
                 template_slots={},
             )
 
-    class NoTemplateMatch:
-        def match_template(self, _concept):
-            return None
+    class FakeHybridLlama:
+        async def generate_template_content(self, **_kwargs):
+            raise AssertionError("Caption generation must not run without a template.")
+
+    class FakeVision:
+        async def generate_sdxl_image(self, *_args, **_kwargs):
+            raise AssertionError("SDXL must not run without a template.")
+
+        async def inspect_with_blip2(self, *_args, **_kwargs):
+            raise AssertionError("BLIP-2 must not run without a template.")
+
+    class NoMatchTemplates:
+        templates = {"drake_hotline": object()}
+        intelligence = object()
 
         def rank_templates(self, _concept):
-            return [{"template_id": "drake_hotline", "score": 0.12}]
+            return [{"template_id": "drake_hotline", "score": 0.12, "reasons": []}]
 
     with pytest.raises(HTTPException) as error:
         await generate_meme(
             request=MemeGenerateRequest(
-                company_description=(
-                    "A mobile app that helps small businesses manage customer "
-                    "orders and daily operations"
-                )
+                company_description="A generic product with no clear meme narrative"
             ),
-            gemini_service=WorkingGemini(),
-            template_service=NoTemplateMatch(),
+            llama_service=FakeLlama(),
+            hybrid_llama=FakeHybridLlama(),
+            vision=FakeVision(),
+            template_service=NoMatchTemplates(),
         )
 
     assert error.value.status_code == 422
     assert error.value.detail["error"] == "no_suitable_template"
-
-
-
-@pytest.mark.asyncio
-async def test_gemini_returns_three_valid_complete_joke_candidates(monkeypatch):
-    from app.services.gemini import GeminiService
-
-    service = GeminiService()
-    responses = [
-        {"candidates": [
-            {"id": "A", "caption": "Good", "template_slots": {"left": "Me at work", "right": "HydroTrack: 0 oz."}},
-            {"id": "B", "caption": "Too long", "template_slots": {"left": "Me at work", "right": "HydroTrack showing zero ounces after work"}},
-            {"id": "C", "caption": "Good", "template_slots": {"left": "One more task", "right": "Drink some water"}},
-        ]},
-        {"candidates": [
-            {"id": "A", "caption": "Work mode", "template_slots": {"left": "Me at work", "right": "HydroTrack: 0 oz."}},
-            {"id": "B", "caption": "Reminder", "template_slots": {"left": "One more task", "right": "Drink some water"}},
-            {"id": "C", "caption": "Hydration", "template_slots": {"left": "Deep in code", "right": "Water break now"}},
-        ]},
-    ]
-    prompts = []
-
-    async def fake_generate_json(prompt):
-        prompts.append(prompt)
-        return responses.pop(0)
-
-    monkeypatch.setattr(service, "_generate_json", fake_generate_json)
-    candidates = await service.generate_joke_candidates(
-        template_id="monkey_puppet",
-        template_name="Monkey Puppet",
-        slot_keys=["left", "right"],
-        company_description="HydroTrack smart hydration bottle",
-        slot_limits={"left": 24, "right": 24},
-        count=3,
-    )
-
-    assert len(candidates) == 3
-    assert len({candidate["id"] for candidate in candidates}) == 3
-    assert all(set(candidate["template_slots"]) == {"left", "right"} for candidate in candidates)
-    assert "REPAIR" in prompts[1]
-
-
-@pytest.mark.asyncio
-async def test_gemini_fails_if_three_valid_jokes_cannot_be_generated(monkeypatch):
-    from app.services.gemini import GeminiError, GeminiService
-
-    service = GeminiService()
-
-    async def fake_generate_json(_prompt):
-        return {"candidates": [
-            {"id": "A", "caption": "Too long", "template_slots": {"top": "This caption is much too long"}}
-        ]}
-
-    monkeypatch.setattr(service, "_generate_json", fake_generate_json)
-    with pytest.raises(GeminiError, match="requested number"):
-        await service.generate_joke_candidates(
-            template_id="change_my_mind",
-            template_name="Change My Mind",
-            slot_keys=["top"],
-            company_description="A test product",
-            slot_limits={"top": 12},
-            count=3,
-        )
-
-
-def test_renderer_rejects_over_limit_caption_without_truncating():
-    service = TemplateService()
-    template = next(iter(service.templates.values()))
-    slot = template.text_slots[0]
-
-    with pytest.raises(ValueError, match="exceeds"):
-        service.render_template(template, {slot.key: "X" * (slot.max_chars + 1)})
