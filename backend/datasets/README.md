@@ -1,6 +1,6 @@
 # Dataset workspace
 
-Keep downloaded source files under `raw/` and normalized application-ready data under `processed/`. Raw files are excluded from Git.
+Keep downloaded source files under `raw/` and normalized application-ready data under `processed/`. Both directories are excluded from Git.
 
 ## ImgFlip575K source layout
 
@@ -9,12 +9,15 @@ Source repository: https://github.com/schesa/ImgFlip575K_Dataset
 The source describes 575,948 meme examples and provides:
 - `dataset/popular_100_memes.csv`: top-100 popular template list
 - `dataset/statistics.json`: number of examples per template
-- `dataset/templates/`: one JSON metadata file per template, including its title, ImgFlip template URL, alternative names, template ID and image dimensions
+- `dataset/templates/*.json`: template metadata, including title, ImgFlip URL, alternative names, template ID and dimensions
+- `dataset/templates/img/`: clean template JPG images
 - `dataset/memes/`: individual captioned meme examples
 
-Important: the template JSON files contain metadata and a `template_url`; do not assume they include the actual image bytes. The `memes/` directory contains the much larger example corpus and is not needed for the first integration.
+The metadata JSON and clean template image are separate files. The image filename generally matches the metadata JSON filename.
 
-## Recommended local layout
+## Local layout
+
+After sparse checkout:
 
 ```text
 backend/datasets/
@@ -25,6 +28,8 @@ backend/datasets/
         statistics.json
         templates/
           *.json
+          img/
+            *.jpg
   processed/
     imgflip_templates/
       manifest.json
@@ -32,17 +37,32 @@ backend/datasets/
         <template-id>.<jpg|png>
 ```
 
-Download only the top-100 CSV, statistics file and template metadata first. Then fetch/cache the clean template images for the subset we decide to support. Keep the original source files unchanged in `raw/`.
+Only the top-100 CSV, statistics, template metadata and clean template images are needed for this first integration. Do not check out or import `dataset/memes/`.
+
+## Build the staging manifest
+
+From the `backend/` directory, run:
+
+```powershell
+python scripts/import_imgflip_templates.py
+```
+
+The importer:
+1. Reads the top-100 CSV and statistics.
+2. Matches each popular template to its metadata JSON by template ID (with a name fallback).
+3. Verifies the corresponding clean image and copies it into `processed/imgflip_templates/images/`.
+4. Writes `processed/imgflip_templates/manifest.json` with source IDs, names, aliases, image dimensions, usage counts and SHA-256 checksums.
+5. Reports any missing metadata or images.
+
+The output is a **staging manifest only**. It does not modify `meme_templates/index.json` or the live semantic catalog.
 
 ## Integration policy
 
-Do not import all 575,948 captioned meme examples into the runtime or commit them to this application repository. Begin by reviewing the 100 template candidates, then curate a smaller reliable set. Each enabled template must have:
-- a downloaded and verified clean image
+Do not import all 575,948 captioned meme examples into the runtime or commit raw/processed dataset files to this application repository. Review the 100 template candidates, then curate a smaller reliable set. Each enabled template must have:
+- a verified clean image
 - stable source template ID, title and alternative names
 - exact text-slot count and semantic slot names
 - manually checked slot coordinates and character limits
 - a semantic profile describing purpose, narrative pattern, suitable intents and cases to avoid
 
-The existing renderer needs local image files and explicit slot coordinates. ImgFlip's source metadata alone is not enough to enable a template automatically.
-
-After download, the next implementation step is an importer that converts the source CSV/JSON into a normalized manifest, downloads only approved template images, and maps curated templates into the application's existing template configuration and semantic catalog.
+The current renderer requires local image files and explicit slot coordinates. Dataset metadata does not provide verified text-slot geometry. Imported templates therefore remain disabled until their slot layout and semantic profile are reviewed.
