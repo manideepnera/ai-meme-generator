@@ -6,13 +6,13 @@ import styles from './CompanyInputForm.module.css';
 interface CompanyInputFormProps {
     onGenerate: (description: string) => void;
     isLoading: boolean;
-    geminiConfigured: boolean | null;
+    hybridConfigured: boolean | null;
 }
 
 export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
     onGenerate,
     isLoading,
-    geminiConfigured,
+    hybridConfigured,
 }) => {
     const [description, setDescription] = useState('');
     const [isFocused, setIsFocused] = useState(false);
@@ -39,7 +39,7 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                         Describe your company or product
                     </label>
                     <p className={styles.helperText}>
-                        Gemini will understand your product and create a funny, relatable meme using an existing template.
+                        LLaMA 3 creates captions, SDXL generates a supporting visual, and BLIP-2 analyses it.
                     </p>
                     <div className={`${styles.textareaContainer} ${isFocused ? styles.focused : ''}`}>
                         <textarea
@@ -63,15 +63,15 @@ export const CompanyInputForm: React.FC<CompanyInputFormProps> = ({
                     <div className={styles.llamaControlText}>
                         <span className={styles.llamaTitle}>AI provider</span>
                         <span className={styles.llamaDescription}>
-                            Google Gemini · 3 joke candidates · automatic quality selection
-                            {geminiConfigured !== null && (
+                            LLaMA 3 · SDXL · BLIP-2 · OpenCV
+                            {hybridConfigured !== null && (
                                 <span className={styles.providerStatus}>
-                                    Gemini API key: {geminiConfigured ? 'configured' : 'not configured'}
+                                    Hybrid pipeline: {hybridConfigured ? 'configured' : 'not configured'}
                                 </span>
                             )}
                         </span>
                     </div>
-                    <span className={styles.modeOn}>GEMINI</span>
+                    <span className={styles.modeOn}>HYBRID</span>
                 </div>
 
                 <button
