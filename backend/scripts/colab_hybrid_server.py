@@ -8,7 +8,7 @@ BLIP2_API_URL=<public-url>/blip2/analyze in backend/.env.
 Install in Colab:
   pip install -q diffusers transformers accelerate safetensors fastapi uvicorn pyngrok
 
-Set NGROK_AUTHTOKEN in the Colab environment before starting this server.
+Set NGROK_AUTHTOKEN and MODEL_API_KEY in the Colab environment before starting this server.\nUse the same MODEL_API_KEY as SDXL_API_KEY and BLIP2_API_KEY in backend/.env.
 Models are loaded on demand and released after each request to reduce VRAM use.
 """
 from __future__ import annotations
@@ -19,13 +19,13 @@ import os
 from typing import Optional
 
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from PIL import Image
 
 app = FastAPI(title="AI Meme Generator - SDXL and BLIP-2 inference")
 SDXL_MODEL = os.getenv("SDXL_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
-BLIP2_MODEL = os.getenv("BLIP2_MODEL", "Salesforce/blip2-opt-2.7b")
+BLIP2_MODEL = os.getenv("BLIP2_MODEL", "Salesforce/blip2-opt-2.7b")\nMODEL_API_KEY = os.getenv("MODEL_API_KEY", "")
 
 
 class SDXLRequest(BaseModel):
